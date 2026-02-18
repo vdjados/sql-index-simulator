@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>SQL Index Simulator</title>
+    <link rel="stylesheet" href="/static/styles/main.css">
+</head>
+<body>
+<header class="header">
+    <div class="header-inner">
+        <div class="logo-text">
+            <h1>SQL Index Simulator</h1>
+            <p>Симуляция выполнения SQL-запроса с разными типами индексов</p>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+    <section class="card">
+        <h2>Доступные индексы</h2>
+        <form method="get" action="/" class="search-form">
+            <input type="text" name="query" placeholder="Поиск по названию индекса..."
+                   value="{{ .Query }}" class="input">
+            <button type="submit" class="btn">Найти</button>
+        </form>
+
+        <div class="services-list">
+            {{ if .Services }}
+                {{ range .Services }}
+                    <a href="/service/{{ .ID }}" class="service-item">
+                        <div class="service-header">
+                            <span class="service-name">{{ .Name }}</span>
+                            <span class="service-id">ID: {{ .ID }}</span>
+                        </div>
+                        <p class="service-desc">{{ .Description }}</p>
+                        <div class="service-meta">
+                            <span>Базовая скорость: <strong>{{ printf "%.2f" .BaseSpeed }}</strong></span>
+                            <span>Базовая память: <strong>{{ printf "%.2f" .BaseMemory }}</strong></span>
+                        </div>
+                    </a>
+                {{ end }}
+            {{ else }}
+                <p>Услуги не найдены.</p>
+            {{ end }}
+        </div>
+    </section>
+</main>
+
+<footer class="footer">
+</footer>
+</body>
+</html>
+
+

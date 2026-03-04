@@ -1,0 +1,61 @@
+<html lang="ru">
+    <head>
+        <title>Запрос № {{ .request.ID }} — SQL Index Simulator</title>
+        <link rel="stylesheet" href="/static/styles/index_style.css">
+    </head>
+    <body>
+        <header class="header-secondary">
+            <a href="/" class="header-logo">
+                <img src="http://localhost:9000/sql-index/logo.png" alt="SQL Index Simulator">
+                <span class="header-title">SQL Index Simulator</span>
+            </a>
+        </header>
+
+        <main class="page">
+            <div class="application-detail">
+                <section class="request-header-card">
+                    <h1 class="request-title">Симуляция SQL-запроса № {{ .request.ID }}</h1>
+                    <div class="request-meta">
+                        <div><strong>ID запроса:</strong> {{ .request.ID }}</div>
+                        <div><strong>Селективность:</strong> {{ printf "%.2f" .request.Selectivity }}</div>
+                        <div><strong>Время выполнения:</strong> {{ .request.ResultTime }}</div>
+                        <div><strong>Используемая память:</strong> {{ .request.ResultMemory }}</div>
+                    </div>
+                </section>
+
+                <section class="request-services">
+                    <table class="request-table">
+                        <thead>
+                            <tr>
+                                <th>Индекс</th>
+                                <th>Размер таблицы</th>
+                                <th>Селективность</th>
+                                <th>ID индекса</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .request.Services }}
+                            <tr>
+                                <td>
+                                    <div class="request-table-index">
+                                        <img
+                                            src="http://localhost:9000/sql-index/{{ .ImageKey }}"
+                                            alt="{{ .ServiceName }}"
+                                            class="request-service-image"
+                                        >
+                                        <span class="request-service-title">{{ .ServiceName }}</span>
+                                    </div>
+                                </td>
+                                <td>{{ .TableSize }}</td>
+                                <td>{{ printf "%.2f" .Selectivity }}</td>
+                                <td class="request-service-id">{{ .ServiceID }}</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+        </main>
+    </body>
+</html>
+

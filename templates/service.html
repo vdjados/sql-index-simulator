@@ -1,66 +1,51 @@
-<!DOCTYPE html>
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>{{ .Service.Name }} – SQL Index Simulator</title>
-    <link rel="stylesheet" href="/static/styles/main.css">
-</head>
-<body>
-<header class="header">
-    <div class="header-inner">
-        <div class="logo-text">
-            <h1>{{ .Service.Name }}</h1>
-            <p>Детали индекса и симуляция запроса</p>
-        </div>
-        <div class="header-time">
-            <a href="/" class="link-back">← На главную</a>
-        </div>
-    </div>
-</header>
+    <head>
+        <title>{{ .service.Name }} — Детали индекса</title>
+        <link rel="stylesheet" href="/static/styles/index_style.css">
+    </head>
+    <body>
+        <header class="header-secondary">
+            <a href="/" class="header-logo">
+                <img src="http://localhost:9000/sql-index/logo.png" alt="SQL Index Simulator">
+                <span class="header-title">SQL Index Simulator</span>
+            </a>
+        </header>
 
-<main class="container">
-    <section class="card">
-        <h2>Информация об индексе</h2>
-        <p class="service-desc">{{ .Service.Description }}</p>
-        <div class="service-meta">
-            <span>Базовая скорость: <strong>{{ printf "%.2f" .Service.BaseSpeed }}</strong></span>
-            <span>Базовая память: <strong>{{ printf "%.2f" .Service.BaseMemory }}</strong></span>
-        </div>
-    </section>
+        <main class="page">
+            <div class="detail-wrapper">
+                <article class="detail-card">
+                    <div class="card-accent-bar"></div>
+                    <div class="detail-card__gif-wrapper">
+                        <img
+                            src="http://localhost:9000/sql-index/{{ .service.GifKey }}"
+                            alt="{{ .service.Name }} GIF"
+                            class="detail-card__gif"
+                        >
+                    </div>
+                    <div class="detail-card__body">
+                        <h1 class="detail-card__title">{{ .service.Name }}</h1>
+                        <p class="detail-card__meta">
+                            <strong>Размер таблицы:</strong> {{ .service.TableSize }}
+                        </p>
+                        <p class="detail-card__meta">
+                            <strong>Скорость выполнения:</strong> {{ .service.Speed }}
+                        </p>
+                        <p class="detail-card__description">
+                            {{ .service.Description }}
+                        </p>
 
-    <section class="card">
-        <h2>Симуляция выполнения запроса</h2>
-        {{ if .Error }}
-            <div class="alert alert-error">
-                {{ .Error }}
+                        <hr class="detail-card__separator">
+
+                        <h2 class="detail-card__section-title">Технические характеристики</h2>
+                        <ul class="detail-card__list">
+                            <li><strong>Структура:</strong> специализированный индекс {{ .service.Name }} для оптимизации доступа к данным.</li>
+                            <li><strong>Сложность:</strong> логарифмический или близкий к константному поиск в зависимости от типа индекса.</li>
+                            <li><strong>Поддерживаемые операции:</strong> выборка по условию WHERE, фильтрация по диапазонам, комбинирование условий в запросе.</li>
+                        </ul>
+                    </div>
+                </article>
             </div>
-        {{ end }}
-        <form method="get" action="/service/{{ .Service.ID }}" class="calc-form">
-            <label for="tableSize" class="label">Размер таблицы (количество строк):</label>
-            <input type="number" id="tableSize" name="tableSize" min="1" step="1" class="input"
-                   placeholder="Например, 100000">
-            <button type="submit" class="btn">Рассчитать</button>
-        </form>
-
-        {{ if .Result }}
-            <div class="result-block">
-                <h3>Результат расчета</h3>
-                <p><span class="result-label">Тип индекса:</span> <strong>{{ .Result.IndexType }}</strong></p>
-                <p><span class="result-label">Размер таблицы:</span> <strong>{{ .Result.TableSize }}</strong> строк</p>
-                <p><span class="result-label">Время выполнения запроса:</span>
-                    <strong>{{ printf "%.2f" .Result.ExecutionTimeMs }}</strong> мс</p>
-                <p><span class="result-label">Использованная память:</span>
-                    <strong>{{ printf "%.2f" .Result.MemoryUsageMB }}</strong> МБ</p>
-            </div>
-        {{ else }}
-            <p class="muted">Введите размер таблицы и нажмите «Рассчитать», чтобы увидеть результаты.</p>
-        {{ end }}
-    </section>
-</main>
-
-<footer class="footer">
-</footer>
-</body>
+        </main>
+    </body>
 </html>
-
 

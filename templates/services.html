@@ -1,0 +1,63 @@
+<html lang="ru">
+    <head>
+        <title>SQL Index Simulator — Индексы</title>
+        <link rel="stylesheet" href="/static/styles/index_style.css">
+    </head>
+    <body>
+        <header class="header-main">
+            <a href="/" class="header-logo">
+                <img src="http://localhost:9000/sql-index/logo.png" alt="SQL Index Simulator">
+                <span class="header-title">SQL Index Simulator</span>
+            </a>
+            <div class="header-actions">
+                {{ if .request }}
+                <a href="/request/{{ .request.ID }}" class="cart-icon" aria-label="Запрос">
+                    <span class="cart-icon-symbol">🧺</span>
+                    <span class="cart-badge">{{ .cartCount }}</span>
+                </a>
+                {{ end }}
+            </div>
+        </header>
+
+        <main class="page">
+            <section class="search-section">
+                <form action="/" method="GET" class="search-form">
+                    <input
+                        type="text"
+                        name="filter"
+                        class="search-input"
+                        placeholder="Поиск по названию индекса или размеру таблицы"
+                        value="{{ .filter }}"
+                    >
+                    <button type="submit" class="search-btn">Найти</button>
+                </form>
+            </section>
+
+            <section class="cards-grid">
+                {{ range .services }}
+                <a href="/service/{{ .ID }}" class="service-card">
+                    <div class="card-image-wrapper">
+                        <img
+                            src="http://localhost:9000/sql-index/{{ .ImageKey }}"
+                            alt="{{ .Name }}"
+                            class="service-card-image"
+                        >
+                    </div>
+                    <div class="service-card-body">
+                        <h1 class="service-card-title">{{ .Name }}</h1>
+                        <div class="service-metrics">
+                            <span class="service-metric-pill">
+                                Таблица: {{ .TableSize }}
+                            </span>
+                            <span class="service-metric-pill">
+                                Время: {{ .Speed }}
+                            </span>
+                        </div>
+                    </div>
+                </a>
+                {{ end }}
+            </section>
+        </main>
+    </body>
+</html>
+

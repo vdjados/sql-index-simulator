@@ -1,0 +1,55 @@
+<html lang="ru">
+    <head>
+        <title>Заявка № {{ .app.ID }} — {{ .app.Title }}</title>
+        <link rel="stylesheet" href="/static/styles/index_style.css">
+    </head>
+    <header class="header-center">
+        <a href="/" class="header-logo">
+            <img src="/static/img/logo.png" alt="Логотип">
+        </a>
+    </header>
+    <div class="application-detail">
+        <a href="/" class="back-link">← Вернуться к списку отделов</a>
+        <div class="application-detail__header-card">
+            <h1 class="application-detail__title">Заявка № {{ .app.ID }} — {{ .app.Title }}</h1>
+            <div class="application-detail__info">
+                <div class="application-detail__info-item"><strong>ID заявки:</strong> {{ .app.ID }}</div>
+                <div class="application-detail__info-item">
+                    <strong>Описание:</strong> {{ .app.Description }}
+                </div>
+                <div class="application-detail__info-item"><strong>Количество отделов:</strong> {{ .app.AppCount }}</div>
+                <div class="application-detail__info-item"><strong>Общее количество сотрудников:</strong> {{ .app.TotalEmployees }}</div>
+            </div>
+            <div class="application-detail__salary-result">
+                Итоговая зарплата руководителей: {{ .totalSalary }} ₽
+            </div>
+        </div>
+
+        <table class="app-table">
+            <thead>
+                <tr>
+                    <th class="app-table__col-photo">Фото</th>
+                    <th>Наименование отдела</th>
+                    <th>Сотрудников</th>
+                    <th>Зарплата руководителя</th>
+                    <th>Роль в структуре</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .app.Departments }}
+                <tr>
+                    <td class="app-table__col-photo">
+                        <img src="http://localhost:9000/test/{{ .Department.Photo }}" alt="img">
+                    </td>
+                    <td>{{ .Department.Title }}</td>
+                    <td>{{ .Department.EmployeeCount }}</td>
+                    <td class="app-table__col-salary">{{ printf "%.0f" .NewSalary }} ₽</td>
+                    <td>
+                        <input type="text" value="{{ .Role }}" readonly class="role-input">
+                    </td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+    </div>
+</html>

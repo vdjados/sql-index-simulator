@@ -1,54 +1,41 @@
-<!DOCTYPE html>
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>SQL Index Simulator</title>
-    <link rel="stylesheet" href="/static/styles/main.css">
-</head>
-<body>
-<header class="header">
-    <div class="header-inner">
-        <div class="logo-text">
-            <h1>SQL Index Simulator</h1>
-            <p>Симуляция выполнения SQL-запроса с разными типами индексов</p>
-        </div>
-    </div>
-</header>
-
-<main class="container">
-    <section class="card">
-        <h2>Доступные индексы</h2>
-        <form method="get" action="/" class="search-form">
-            <input type="text" name="query" placeholder="Поиск по названию индекса..."
-                   value="{{ .Query }}" class="input">
-            <button type="submit" class="btn">Найти</button>
+    <head>
+        <title>Административная структура компании — Отделы</title>
+        <link rel="stylesheet" href="/static/styles/index_style.css">
+    </head>
+    <header>
+        <a href="/" class="header-logo">
+            <img src="/static/img/logo.png" alt="Логотип">
+        </a>
+        <form action="/" method="GET">
+            <input type="text" name="query" class="search-input" placeholder="Поиск по отделам" value="{{ .query }}">
+            <button type="submit" class="search-btn">Найти</button>
         </form>
-
-        <div class="services-list">
-            {{ if .Services }}
-                {{ range .Services }}
-                    <a href="/service/{{ .ID }}" class="service-item">
-                        <div class="service-header">
-                            <span class="service-name">{{ .Name }}</span>
-                            <span class="service-id">ID: {{ .ID }}</span>
-                        </div>
-                        <p class="service-desc">{{ .Description }}</p>
-                        <div class="service-meta">
-                            <span>Базовая скорость: <strong>{{ printf "%.2f" .BaseSpeed }}</strong></span>
-                            <span>Базовая память: <strong>{{ printf "%.2f" .BaseMemory }}</strong></span>
-                        </div>
-                    </a>
-                {{ end }}
-            {{ else }}
-                <p>Услуги не найдены.</p>
+    </header>
+    <div class="space">
+        {{ range .applications }}
+        <a href="/application/{{ .ID }}" class="application-card">
+            <div class="application-card__title">{{ .Title }}</div>
+            <div class="application-card__id">
+                Заявка: <span class="application-card__link">№ {{ .ID }}</span>
+            </div>
+            <div class="application-card__info">
+                <span>Отделов в структуре: <strong>{{ .AppCount }}</strong></span>
+                <span>Сотрудников: <strong>{{ .TotalEmployees }}</strong></span>
+                <span>Зарплата руководителей: <span class="application-card__badge">{{ printf "%.0f" .TotalSalary }} ₽</span></span>
+            </div>
+        </a>
+        {{ end }}
+        <div class="container">
+            {{ range .departments }}
+            <a href="/department/{{ .ID }}" class="card" data-video="http://localhost:9000/test/{{ .Video }}">
+                <div class="card-accent-bar"></div>
+                <img src="http://localhost:9000/test/{{ .Photo }}" alt="img">
+                <h1>{{ .Title }}</h1>
+                <p class="card__employees">Сотрудников: {{ .EmployeeCount }}</p>
+                <p class="card__description">{{ .ShortDescription }}</p>
+            </a>
             {{ end }}
         </div>
-    </section>
-</main>
-
-<footer class="footer">
-</footer>
-</body>
+    </div>
 </html>
-
-

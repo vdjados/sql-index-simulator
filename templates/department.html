@@ -1,0 +1,44 @@
+<html lang="ru">
+    <head>
+        <title>{{ .department.Title }} — Подробная информация</title>
+        <link rel="stylesheet" href="/static/styles/index_style.css">
+    </head>
+    <header class="header-center">
+        <a href="/" class="header-logo">
+            <img src="/static/img/logo.png" alt="Логотип">
+        </a>
+    </header>
+    <div class="detail-wrapper">
+        <a href="/" class="back-link">← Вернуться к списку отделов</a>
+        <div class="detail-card">
+            <div class="card-accent-bar"></div>
+            <video class="detail-card__video" controls autoplay muted loop>
+                <source src="http://localhost:9000/test/{{ .department.Video }}" type="video/mp4">
+            </video>
+            <div class="detail-card__body">
+                <h1 class="detail-card__title">{{ .department.Title }}</h1>
+                <p class="detail-card__employees">Сотрудников: {{ .department.EmployeeCount }}</p>
+                <p class="detail-card__meta"><strong>Подчиняется:</strong> {{ .department.ReportsTo }}</p>
+                <p class="detail-card__description">{{ .department.Description }}</p>
+                <hr class="detail-card__separator">
+                <h2 class="detail-card__section-title">Начальник подразделения</h2>
+                {{ if .hasManager }}
+                <div class="manager-block">
+                    <div class="manager-block__name">{{ .department.Head }}</div>
+                    <div class="manager-block__role">Руководитель отдела {{ .department.Title }}</div>
+                    <div class="manager-block__meta">
+                        <span><strong>Уровень в структуре:</strong> {{ .appDep.Level }}</span>
+                        <span><strong>Подчинённых сотрудников:</strong> {{ .department.EmployeeCount }}</span>
+                        <span><strong>Базовый оклад для расчёта:</strong> {{ printf "%.0f" .appDep.NewSalary }} ₽</span>
+                    </div>
+                </div>
+                {{ else }}
+                <div class="manager-block">
+                    <div class="manager-block__name">{{ .department.Head }}</div>
+                    <div class="manager-block__role">Руководитель отдела</div>
+                </div>
+                {{ end }}
+            </div>
+        </div>
+    </div>
+</html>

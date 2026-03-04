@@ -1,9 +1,9 @@
-module sql-index-simulator
+module web_backend
 
-go 1.20
+go 1.18
 
 require (
-	github.com/gin-gonic/gin v1.10.0
+	github.com/gin-gonic/gin v1.10.1
 	github.com/sirupsen/logrus v1.9.3
 )
 

@@ -1,229 +1,242 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+	"time"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+)
+
+// Статусы заявок
+const (
+	StatusDraft    = "draft"
+	StatusDeleted  = "deleted"
+	StatusFormed   = "formed"
+	StatusFinished = "completed"
+	StatusRejected = "rejected"
 )
 
 type Repository struct {
+	db *gorm.DB
 }
 
-func NewRepository() (*Repository, error) {
-	return &Repository{}, nil
+// Модели БД
+
+type User struct {
+	ID    uint   `gorm:"primaryKey"`
+	Name  string `gorm:"size:255;not null"`
+	Email string `gorm:"size:255;uniqueIndex"`
+	Role  string `gorm:"size:32;not null;default:'user'"`
 }
 
-// Service описывает тип индекса в симуляторе
+// Service описывает тип индекса в симуляторе и хранится в таблице services.
 type Service struct {
-	ID          string
-	Name        string
-	TableSize   string
-	Speed       string
-	Description string
-	ImageKey    string
-	GifKey      string
+	ID          string `gorm:"primaryKey;size:64"`
+	Name        string `gorm:"size:255;not null"`
+	TableSize   string `gorm:"size:64;not null"`
+	Speed       string `gorm:"size:64;not null"`
+	Description string `gorm:"type:text;not null"`
+	ImageKey    string `gorm:"size:255"`
+	GifKey      string `gorm:"size:255"`
+	Status      string `gorm:"size:32;not null;default:'active'"` // active / deleted
 }
 
-// Request описывает запрос (запрос) и его готовый результат
+// Request описывает заявку (симуляцию запроса) и её сводный результат.
 type Request struct {
-	ID           string
-	Selectivity  float64
-	ResultTime   string
-	ResultMemory string
-	Services     []RequestService
+	ID uint `gorm:"primaryKey"`
+
+	Status string `gorm:"size:32;not null"`
+
+	CreatedAt   time.Time `gorm:"not null"`
+	CreatedByID uint      `gorm:"not null"`
+
+	FormedAt   *time.Time
+	FinishedAt *time.Time
+
+	ModeratorID *uint
+
+	Selectivity  float64 `gorm:"not null"`
+	ResultTime   string  `gorm:"size:64"`
+	ResultMemory string  `gorm:"size:64"`
+
+	Services []RequestService `gorm:"foreignKey:RequestID"`
 }
 
-// RequestService связывает запрос с конкретным индексом
+// RequestService описывает связь m-n между заявкой и услугой.
+// Используется составной ключ (request_id, service_id) и дополнительные поля.
 type RequestService struct {
-	ServiceID   string
-	ServiceName string
-	TableSize   string
-	Selectivity float64
-	ImageKey    string
+	RequestID uint   `gorm:"primaryKey"`
+	ServiceID string `gorm:"primaryKey;size:64"`
+
+	// Дублирующие поля по предметной области для удобства отображения
+	ServiceName string  `gorm:"size:255;not null"`
+	TableSize   string  `gorm:"size:64;not null"`
+	Selectivity float64 `gorm:"not null"`
+	ImageKey    string  `gorm:"size:255"`
+
+	Quantity int  `gorm:"not null;default:1"`
+	Position int  `gorm:"not null;default:1"`
+	IsMain   bool `gorm:"not null;default:false"`
 }
 
-func (r *Repository) getAllServices() []Service {
-	return []Service{
-		{
-			ID:        "btree-10k",
-			Name:      "B-tree",
-			TableSize: "10k rows",
-			Speed:     "0.3ms",
-			Description: "Классический сбалансированный B-tree индекс, оптимальный для диапазонных и точечных запросов по упорядоченным ключам. Хорошо масштабируется и обеспечивает логарифмическую сложность поиска.",
-			ImageKey: "btree.png",
-			GifKey:   "btree.gif",
-		},
-		{
-			ID:        "btree-1m",
-			Name:      "B-tree (large)",
-			TableSize: "1M rows",
-			Speed:     "1.8ms",
-			Description: "B-tree индекс на крупной таблице, демонстрирует стабильное время отклика даже при миллионах строк благодаря иерархической структуре страниц.",
-			ImageKey: "btree.png",
-			GifKey:   "btree.gif",
-		},
-		{
-			ID:        "hash-100k",
-			Name:      "Hash",
-			TableSize: "100k rows",
-			Speed:     "0.5ms",
-			Description: "Hash индекс, оптимизированный для точечных запросов по равенству. Не поддерживает диапазонные операции, но показывает высокую производительность при выборке по ключу.",
-			ImageKey: "hash.png",
-			GifKey:   "hash.gif",
-		},
-		{
-			ID:        "bitmap-1m",
-			Name:      "Bitmap",
-			TableSize: "1M rows",
-			Speed:     "2.1ms",
-			Description: "Bitmap индекс для низкоселективных столбцов. Эффективен для сложных логических комбинаций условий и аналитических запросов.",
-			ImageKey: "bitmap.png",
-			GifKey:   "bitmap.gif",
-		},
-		{
-			ID:        "gist-500k",
-			Name:      "GiST",
-			TableSize: "500k rows",
-			Speed:     "1.2ms",
-			Description: "GiST (Generalized Search Tree) индекс, используемый для сложных типов данных: геометрии, диапазоны, полнотекстовый поиск. Поддерживает настраиваемые операторы соответствия.",
-			ImageKey: "gist.png",
-			GifKey:   "gist.gif",
-		},
-		{
-			ID:        "gin-500k",
-			Name:      "GIN",
-			TableSize: "500k rows",
-			Speed:     "0.9ms",
-			Description: "GIN (Generalized Inverted Index) индекс, оптимальный для массивов и полнотекстового поиска. Обеспечивает быстрый поиск по множеству значений в одной записи.",
-			ImageKey: "gin.png",
-			GifKey:   "gin.gif",
-		},
+// NewRepository инициализирует подключение к БД и выполняет миграции.
+func NewRepository(dsn string) (*Repository, error) {
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, err
 	}
+
+	if err := db.AutoMigrate(&User{}, &Service{}, &Request{}, &RequestService{}); err != nil {
+		return nil, err
+	}
+
+	return &Repository{db: db}, nil
 }
 
-// GetServices возвращает список индексов с серверной фильтрацией по имени или размеру таблицы.
-// Фильтр применяется по подстроке без учёта регистра.
+// GetServices возвращает список индексов с фильтрацией по имени или размеру таблицы.
+// Фильтр применяется по подстроке без учёта регистра, учитываются только активные услуги.
 func (r *Repository) GetServices(filter string) ([]Service, error) {
-	services := r.getAllServices()
-	if filter == "" {
-		return services, nil
+	var services []Service
+	query := r.db.Where("status = ?", "active")
+
+	if filter != "" {
+		lower := strings.ToLower(filter)
+		like := "%" + lower + "%"
+		query = query.Where(
+			r.db.Where("LOWER(name) LIKE ?", like).
+				Or("LOWER(table_size) LIKE ?", like),
+		)
 	}
 
-	lower := strings.ToLower(filter)
-	var result []Service
-	for _, s := range services {
-		if strings.Contains(strings.ToLower(s.Name), lower) ||
-			strings.Contains(strings.ToLower(s.TableSize), lower) {
-			result = append(result, s)
-		}
+	if err := query.Find(&services).Error; err != nil {
+		return nil, err
 	}
-
-	if len(result) == 0 {
-		return []Service{}, nil
-	}
-	return result, nil
+	return services, nil
 }
 
-// GetService возвращает один индекс по его ID.
+// GetService возвращает одну услугу по её ID.
 func (r *Repository) GetService(id string) (Service, error) {
-	for _, s := range r.getAllServices() {
-		if s.ID == id {
-			return s, nil
+	var s Service
+	if err := r.db.First(&s, "id = ? AND status = ?", id, "active").Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Service{}, fmt.Errorf("индекс с ID %s не найден", id)
+		}
+		return Service{}, err
+	}
+	return s, nil
+}
+
+// GetRequest возвращает одну заявку по ID вместе с её услугами.
+func (r *Repository) GetRequest(id uint) (Request, error) {
+	var req Request
+	if err := r.db.Preload("Services").First(&req, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Request{}, fmt.Errorf("запрос с ID %d не найден", id)
+		}
+		return Request{}, err
+	}
+
+	// Логически удалённые заявки не должны быть доступны.
+	if req.Status == StatusDeleted {
+		return Request{}, fmt.Errorf("запрос с ID %d удалён", id)
+	}
+
+	return req, nil
+}
+
+// GetCurrentRequest ищет текущую заявку пользователя в статусе черновика.
+func (r *Repository) GetCurrentRequest(userID uint) (*Request, error) {
+	var req Request
+	err := r.db.Preload("Services").First(&req, "created_by_id = ? AND status = ?", userID, StatusDraft).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &req, nil
+}
+
+// AddServiceToDraft добавляет услугу в текущую заявку-проект пользователя.
+// Если черновика нет, он создаётся. Возвращает итоговую заявку.
+func (r *Repository) AddServiceToDraft(userID uint, serviceID string) (*Request, error) {
+	var service Service
+	if err := r.db.First(&service, "id = ? AND status = ?", serviceID, "active").Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("индекс с ID %s не найден", serviceID)
+		}
+		return nil, err
+	}
+
+	var req Request
+	if err := r.db.Where("created_by_id = ? AND status = ?", userID, StatusDraft).First(&req).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			req = Request{
+				Status:       StatusDraft,
+				CreatedAt:    time.Now(),
+				CreatedByID:  userID,
+				Selectivity:  0.05, // базовое значение, можно править через форму
+				ResultTime:   "",
+				ResultMemory: "",
+			}
+			if err := r.db.Create(&req).Error; err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
 		}
 	}
-	return Service{}, fmt.Errorf("индекс с ID %s не найден", id)
-}
 
-// getAllRequests возвращает заранее подготовленные запросы (запросы) с готовыми результатами.
-func (r *Repository) getAllRequests() []Request {
-	services := r.getAllServices()
-	serviceByID := make(map[string]Service, len(services))
-	for _, s := range services {
-		serviceByID[s.ID] = s
-	}
-
-	req1 := Request{
-		ID:           "1",
-		Selectivity:  0.05,
-		ResultTime:   "0.7ms",
-		ResultMemory: "64KB",
-		Services: []RequestService{
-			{
-				ServiceID:   "btree-10k",
-				ServiceName: serviceByID["btree-10k"].Name,
-				TableSize:   serviceByID["btree-10k"].TableSize,
-				Selectivity: 0.05,
-				ImageKey:    serviceByID["btree-10k"].ImageKey,
-			},
-			{
-				ServiceID:   "hash-100k",
-				ServiceName: serviceByID["hash-100k"].Name,
-				TableSize:   serviceByID["hash-100k"].TableSize,
-				Selectivity: 0.05,
-				ImageKey:    serviceByID["hash-100k"].ImageKey,
-			},
-			{
-				ServiceID:   "gin-500k",
-				ServiceName: serviceByID["gin-500k"].Name,
-				TableSize:   serviceByID["gin-500k"].TableSize,
-				Selectivity: 0.05,
-				ImageKey:    serviceByID["gin-500k"].ImageKey,
-			},
-		},
-	}
-
-	req2 := Request{
-		ID:           "2",
-		Selectivity:  0.5,
-		ResultTime:   "3.4ms",
-		ResultMemory: "128KB",
-		Services: []RequestService{
-			{
-				ServiceID:   "btree-1m",
-				ServiceName: serviceByID["btree-1m"].Name,
-				TableSize:   serviceByID["btree-1m"].TableSize,
-				Selectivity: 0.5,
-				ImageKey:    serviceByID["btree-1m"].ImageKey,
-			},
-			{
-				ServiceID:   "bitmap-1m",
-				ServiceName: serviceByID["bitmap-1m"].Name,
-				TableSize:   serviceByID["bitmap-1m"].TableSize,
-				Selectivity: 0.5,
-				ImageKey:    serviceByID["bitmap-1m"].ImageKey,
-			},
-			{
-				ServiceID:   "gist-500k",
-				ServiceName: serviceByID["gist-500k"].Name,
-				TableSize:   serviceByID["gist-500k"].TableSize,
-				Selectivity: 0.5,
-				ImageKey:    serviceByID["gist-500k"].ImageKey,
-			},
-		},
-	}
-
-	return []Request{req1, req2}
-}
-
-// GetRequests возвращает все запросы.
-func (r *Repository) GetRequests() ([]Request, error) {
-	return r.getAllRequests(), nil
-}
-
-// GetRequest возвращает один запрос по ID.
-func (r *Repository) GetRequest(id string) (Request, error) {
-	for _, req := range r.getAllRequests() {
-		if req.ID == id {
-			return req, nil
+	var existing RequestService
+	err := r.db.First(&existing, "request_id = ? AND service_id = ?", req.ID, service.ID).Error
+	if err == nil {
+		existing.Quantity++
+		if err := r.db.Save(&existing).Error; err != nil {
+			return nil, err
 		}
+	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		var count int64
+		if err := r.db.Model(&RequestService{}).Where("request_id = ?", req.ID).Count(&count).Error; err != nil {
+			return nil, err
+		}
+
+		rs := RequestService{
+			RequestID:   req.ID,
+			ServiceID:   service.ID,
+			ServiceName: service.Name,
+			TableSize:   service.TableSize,
+			Selectivity: req.Selectivity,
+			ImageKey:    service.ImageKey,
+			Quantity:    1,
+			Position:    int(count) + 1,
+			IsMain:      count == 0,
+		}
+
+		if err := r.db.Create(&rs).Error; err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, err
 	}
-	return Request{}, fmt.Errorf("запрос с ID %s не найден", id)
+
+	if err := r.db.Preload("Services").First(&req, "id = ?", req.ID).Error; err != nil {
+		return nil, err
+	}
+	return &req, nil
 }
 
-// GetCurrentRequest возвращает первый запрос для отображения в "корзине" на главной странице.
-func (r *Repository) GetCurrentRequest() (*Request, error) {
-	requests := r.getAllRequests()
-	if len(requests) == 0 {
-		return nil, fmt.Errorf("список запросов пуст")
+// DeleteRequestLogical выполняет логическое удаление заявки через raw SQL UPDATE без использования ORM.
+func (r *Repository) DeleteRequestLogical(userID uint, requestID uint) error {
+	sql := "UPDATE requests SET status = $1 WHERE id = $2 AND created_by_id = $3"
+	result := r.db.Exec(sql, StatusDeleted, requestID, userID)
+	if result.Error != nil {
+		return result.Error
 	}
-	return &requests[0], nil
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("заявка не найдена или недоступна для удаления")
+	}
+	return nil
 }

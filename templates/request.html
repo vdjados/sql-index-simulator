@@ -21,6 +21,9 @@
                         <div><strong>Время выполнения:</strong> {{ .request.ResultTime }}</div>
                         <div><strong>Используемая память:</strong> {{ .request.ResultMemory }}</div>
                     </div>
+                    <form action="/request/{{ .request.ID }}/delete" method="POST" style="margin-top: 16px;">
+                        <button type="submit" class="search-btn">Логически удалить заявку</button>
+                    </form>
                 </section>
 
                 <section class="request-services">

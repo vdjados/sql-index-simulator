@@ -35,14 +35,16 @@
 
             <section class="cards-grid">
                 {{ range .services }}
-                <a href="/service/{{ .ID }}" class="service-card">
-                    <div class="card-image-wrapper">
-                        <img
-                            src="http://localhost:9000/sql-index/{{ .ImageKey }}"
-                            alt="{{ .Name }}"
-                            class="service-card-image"
-                        >
-                    </div>
+                <div class="service-card">
+                    <a href="/service/{{ .ID }}">
+                        <div class="card-image-wrapper">
+                            <img
+                                src="http://localhost:9000/sql-index/{{ .ImageKey }}"
+                                alt="{{ .Name }}"
+                                class="service-card-image"
+                            >
+                        </div>
+                    </a>
                     <div class="service-card-body">
                         <h1 class="service-card-title">{{ .Name }}</h1>
                         <div class="service-metrics">
@@ -53,8 +55,12 @@
                                 Время: {{ .Speed }}
                             </span>
                         </div>
+                        <form action="/request/add" method="POST" class="service-add-form">
+                            <input type="hidden" name="service_id" value="{{ .ID }}">
+                            <button type="submit" class="search-btn">Добавить в заявку</button>
+                        </form>
                     </div>
-                </a>
+                </div>
                 {{ end }}
             </section>
         </main>

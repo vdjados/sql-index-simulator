@@ -129,6 +129,24 @@ func (h *Handler) DeleteRequest(ctx *gin.Context) {
 	ctx.Redirect(http.StatusSeeOther, "/")
 }
 
+// CompleteRequest завершает заявку: считает по формуле время/память и сохраняет в БД.
+func (h *Handler) CompleteRequest(ctx *gin.Context) {
+	idParam := ctx.Param("id")
+	idUint64, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		ctx.String(http.StatusBadRequest, fmt.Sprintf("invalid request id %s", idParam))
+		return
+	}
+	requestID := uint(idUint64)
+	const userID = 1
+
+	if err := h.Repository.CompleteRequest(userID, requestID); err != nil {
+		h.errorHandler(ctx, http.StatusBadRequest, err)
+		return
+	}
+	ctx.Redirect(http.StatusSeeOther, "/request/"+idParam)
+}
+
 func (h *Handler) errorHandler(ctx *gin.Context, errorStatusCode int, err error) {
 	logrus.Error(err.Error())
 	ctx.JSON(errorStatusCode, gin.H{

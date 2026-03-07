@@ -273,17 +273,19 @@ img {
 }
 
 .service-card-body {
-    padding: 16px 18px 18px;
+    padding: 16px 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .service-card-title {
     font-size: 16px;
     font-weight: 600;
-    margin-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .service-metrics {
-    margin-top: 8px;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -295,6 +297,16 @@ img {
     border-radius: 999px;
     background: linear-gradient(90deg, rgba(46, 204, 113, 0.12), rgba(52, 152, 219, 0.12));
     color: #2C3E50;
+}
+
+.service-add-form {
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #E1E4E8;
+}
+
+.service-add-form .search-btn {
+    width: 100%;
 }
 
 .card-accent-bar {

@@ -44,6 +44,7 @@ func StartServer() {
 	router.GET("/request/:id", handler.GetRequest)
 	router.POST("/request/add", handler.AddToRequest)
 	router.POST("/request/:id/delete", handler.DeleteRequest)
+	router.POST("/request/:id/complete", handler.CompleteRequest)
 
 	port := os.Getenv("PORT")
 	if port == "" {

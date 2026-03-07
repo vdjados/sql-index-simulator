@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,20 +67,22 @@ type Request struct {
 }
 
 // RequestService описывает связь m-n между заявкой и услугой.
-// Используется составной ключ (request_id, service_id) и дополнительные поля.
+// Составной уникальный ключ (request_id, service_id). При завершении заявки заполняется CalculatedTimeMs.
 type RequestService struct {
 	RequestID uint   `gorm:"primaryKey"`
 	ServiceID string `gorm:"primaryKey;size:64"`
 
-	// Дублирующие поля по предметной области для удобства отображения
 	ServiceName string  `gorm:"size:255;not null"`
 	TableSize   string  `gorm:"size:64;not null"`
 	Selectivity float64 `gorm:"not null"`
 	ImageKey    string  `gorm:"size:255"`
 
-	Quantity int  `gorm:"not null;default:1"`
-	Position int  `gorm:"not null;default:1"`
-	IsMain   bool `gorm:"not null;default:false"`
+	Quantity int   `gorm:"not null;default:1"`
+	Position int   `gorm:"not null;default:1"`
+	IsMain   bool  `gorm:"not null;default:false"`
+	CalculatedTimeMs float64 `gorm:"type:numeric(10,2)"` // считается при завершении заявки
+
+	Service *Service `gorm:"foreignKey:ServiceID"` // для расчёта по формуле (скорость индекса)
 }
 
 // NewRepository инициализирует подключение к БД и выполняет миграции.
@@ -94,6 +97,28 @@ func NewRepository(dsn string) (*Repository, error) {
 	}
 
 	return &Repository{db: db}, nil
+}
+
+// parseSpeedMs извлекает число из строки вида "0.3ms" или "1.8ms".
+func parseSpeedMs(s string) float64 {
+	s = strings.TrimSpace(strings.TrimSuffix(strings.ToLower(s), "ms"))
+	f, _ := strconv.ParseFloat(s, 64)
+	return f
+}
+
+// calculateResultTime считает время по формуле: Σ (quantity × t_i × (1 + selectivity)).
+func (r *Repository) calculateResultTimeAndMemory(req *Request) (timeMs float64, memoryKB float64) {
+	for i := range req.Services {
+		rs := &req.Services[i]
+		var speedMs float64
+		if rs.Service != nil {
+			speedMs = parseSpeedMs(rs.Service.Speed)
+		}
+		timeMs += float64(rs.Quantity) * speedMs * (1 + rs.Selectivity)
+	}
+	// Память: базовые 64 KB + примерно по 16 KB на каждую позицию в заявке
+	memoryKB = 64 + float64(len(req.Services))*16
+	return timeMs, memoryKB
 }
 
 // GetServices возвращает список индексов с фильтрацией по имени или размеру таблицы.
@@ -129,33 +154,49 @@ func (r *Repository) GetService(id string) (Service, error) {
 	return s, nil
 }
 
-// GetRequest возвращает одну заявку по ID вместе с её услугами.
+// GetRequest возвращает одну заявку по ID вместе с услугами. Время и память считаются по формуле, если ещё не сохранены.
 func (r *Repository) GetRequest(id uint) (Request, error) {
 	var req Request
-	if err := r.db.Preload("Services").First(&req, "id = ?", id).Error; err != nil {
+	if err := r.db.Preload("Services.Service").First(&req, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return Request{}, fmt.Errorf("запрос с ID %d не найден", id)
 		}
 		return Request{}, err
 	}
 
-	// Логически удалённые заявки не должны быть доступны.
 	if req.Status == StatusDeleted {
 		return Request{}, fmt.Errorf("запрос с ID %d удалён", id)
 	}
 
+	// Расчёт по формуле, если в заявке есть услуги и результат ещё не сохранён
+	if len(req.Services) > 0 && req.ResultTime == "" {
+		timeMs, memKB := r.calculateResultTimeAndMemory(&req)
+		req.ResultTime = fmt.Sprintf("%.2fms", timeMs)
+		req.ResultMemory = fmt.Sprintf("%.0fKB", memKB)
+	}
+	if req.ResultTime == "" {
+		req.ResultTime = "—"
+	}
+	if req.ResultMemory == "" {
+		req.ResultMemory = "—"
+	}
 	return req, nil
 }
 
 // GetCurrentRequest ищет текущую заявку пользователя в статусе черновика.
 func (r *Repository) GetCurrentRequest(userID uint) (*Request, error) {
 	var req Request
-	err := r.db.Preload("Services").First(&req, "created_by_id = ? AND status = ?", userID, StatusDraft).Error
+	err := r.db.Preload("Services.Service").First(&req, "created_by_id = ? AND status = ?", userID, StatusDraft).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, err
+	}
+	if len(req.Services) > 0 && req.ResultTime == "" {
+		timeMs, memKB := r.calculateResultTimeAndMemory(&req)
+		req.ResultTime = fmt.Sprintf("%.2fms", timeMs)
+		req.ResultMemory = fmt.Sprintf("%.0fKB", memKB)
 	}
 	return &req, nil
 }
@@ -239,4 +280,44 @@ func (r *Repository) DeleteRequestLogical(userID uint, requestID uint) error {
 		return fmt.Errorf("заявка не найдена или недоступна для удаления")
 	}
 	return nil
+}
+
+// CompleteRequest переводит заявку в статус «завершена», считает по формуле время и память и сохраняет в БД.
+// В таблицу request_services записывается рассчитанное время по каждой позиции (CalculatedTimeMs).
+func (r *Repository) CompleteRequest(userID uint, requestID uint) error {
+	var req Request
+	if err := r.db.Preload("Services.Service").First(&req, "id = ? AND created_by_id = ?", requestID, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("заявка не найдена")
+		}
+		return err
+	}
+	if req.Status != StatusDraft {
+		return fmt.Errorf("завершить можно только заявку в статусе черновик")
+	}
+	if len(req.Services) == 0 {
+		return fmt.Errorf("в заявке нет услуг")
+	}
+
+	timeMs, memKB := r.calculateResultTimeAndMemory(&req)
+	now := time.Now()
+
+	// Заполняем CalculatedTimeMs по каждой позиции м-м
+	for i := range req.Services {
+		rs := &req.Services[i]
+		var speedMs float64
+		if rs.Service != nil {
+			speedMs = parseSpeedMs(rs.Service.Speed)
+		}
+		rs.CalculatedTimeMs = float64(rs.Quantity) * speedMs * (1 + rs.Selectivity)
+		if err := r.db.Model(rs).Update("calculated_time_ms", rs.CalculatedTimeMs).Error; err != nil {
+			return err
+		}
+	}
+
+	req.Status = StatusFinished
+	req.ResultTime = fmt.Sprintf("%.2fms", timeMs)
+	req.ResultMemory = fmt.Sprintf("%.0fKB", memKB)
+	req.FinishedAt = &now
+	return r.db.Save(&req).Error
 }

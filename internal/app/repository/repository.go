@@ -1,14 +1,19 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/v7"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	minioClient "web_backend/internal/app/minioClient"
 )
 
 // Статусы sql_query
@@ -22,6 +27,7 @@ const (
 
 type Repository struct {
 	db *gorm.DB
+	mc *minio.Client
 }
 
 // Модели БД
@@ -97,7 +103,357 @@ func NewRepository(dsn string) (*Repository, error) {
 		return nil, err
 	}
 
-	return &Repository{db: db}, nil
+	mc, err := minioClient.InitMinio()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Repository{db: db, mc: mc}, nil
+}
+
+const creatorUserID uint = 1
+
+func CreatorUserID() uint {
+	return creatorUserID
+}
+
+const moderatorUserID uint = 2
+
+func ModeratorUserID() uint {
+	return moderatorUserID
+}
+
+var (
+	ErrNotFound    = errors.New("not found")
+	ErrNotAllowed  = errors.New("not allowed")
+	ErrNoDraft     = errors.New("no draft")
+	ErrValidation  = errors.New("validation")
+)
+
+func (r *Repository) CreateUser(u User) (User, error) {
+	u.ID = 0
+	if u.Role == "" {
+		u.Role = "user"
+	}
+	if u.Name == "" || u.Email == "" {
+		return User{}, ErrValidation
+	}
+	if err := r.db.Create(&u).Error; err != nil {
+		return User{}, err
+	}
+	return u, nil
+}
+
+func (r *Repository) getDraftOrCreate(userID uint) (*Request, error) {
+	var req Request
+	err := r.db.Preload("Services.Service").First(&req, "created_by_id = ? AND status = ?", userID, StatusDraft).Error
+	if err == nil {
+		return &req, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	req = Request{
+		Status:          StatusDraft,
+		CreatedAt:       time.Now(),
+		CreatedByID:     userID,
+		Selectivity:     0.05,
+		ResultTime:      "",
+		ResultMemory:    "",
+		QueryDescription: "",
+	}
+	if err := r.db.Create(&req).Error; err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+func (r *Repository) ApiGetSqlQuery(id uint) (Request, error) {
+	var req Request
+	if err := r.db.Preload("Services.Service").First(&req, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return Request{}, ErrNotFound
+		}
+		return Request{}, err
+	}
+	if req.Status == StatusDeleted {
+		return Request{}, ErrNotFound
+	}
+	return req, nil
+}
+
+func (r *Repository) ApiEditSqlQuery(userID uint, id uint, queryDescription *string, selectivity *float64) (Request, error) {
+	req, err := r.ApiGetSqlQuery(id)
+	if err != nil {
+		return Request{}, err
+	}
+	if req.CreatedByID != userID {
+		return Request{}, ErrNotAllowed
+	}
+	if req.Status != StatusDraft {
+		return Request{}, ErrNotAllowed
+	}
+	if queryDescription != nil {
+		req.QueryDescription = strings.TrimSpace(*queryDescription)
+	}
+	if selectivity != nil {
+		if *selectivity < 0 || *selectivity > 1 {
+			return Request{}, ErrValidation
+		}
+		req.Selectivity = *selectivity
+	}
+	if err := r.db.Save(&req).Error; err != nil {
+		return Request{}, err
+	}
+	// синхронизируем селективность в m-m, если она используется в позициях
+	if selectivity != nil {
+		_ = r.db.Model(&RequestService{}).Where("request_id = ?", req.ID).Update("selectivity", req.Selectivity).Error
+	}
+	return req, nil
+}
+
+func (r *Repository) ApiDeleteSqlQuery(userID uint, id uint) error {
+	req, err := r.ApiGetSqlQuery(id)
+	if err != nil {
+		return err
+	}
+	if req.CreatedByID != userID {
+		return ErrNotAllowed
+	}
+	if req.Status != StatusDraft {
+		return ErrNotAllowed
+	}
+	sql := "UPDATE requests SET status = $1 WHERE id = $2 AND created_by_id = $3"
+	res := r.db.Exec(sql, StatusDeleted, id, userID)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Repository) ApiAddToDraft(userID uint, serviceID string) (RequestService, error) {
+	draft, err := r.getDraftOrCreate(userID)
+	if err != nil {
+		return RequestService{}, err
+	}
+	if draft.Status != StatusDraft {
+		return RequestService{}, ErrNotAllowed
+	}
+
+	var svc Service
+	if err := r.db.First(&svc, "id = ? AND status = ?", serviceID, "active").Error; err != nil {
+		return RequestService{}, ErrNotFound
+	}
+
+	var item RequestService
+	err = r.db.First(&item, "request_id = ? AND service_id = ?", draft.ID, svc.ID).Error
+	if err == nil {
+		item.Quantity++
+		if err := r.db.Save(&item).Error; err != nil {
+			return RequestService{}, err
+		}
+		return item, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return RequestService{}, err
+	}
+
+	var count int64
+	if err := r.db.Model(&RequestService{}).Where("request_id = ?", draft.ID).Count(&count).Error; err != nil {
+		return RequestService{}, err
+	}
+	item = RequestService{
+		RequestID:   draft.ID,
+		ServiceID:   svc.ID,
+		ServiceName: svc.Name,
+		TableSize:   svc.TableSize,
+		Selectivity: draft.Selectivity,
+		ImageKey:    svc.ImageKey,
+		Quantity:    1,
+		Position:    int(count) + 1,
+		IsMain:      count == 0,
+	}
+	if err := r.db.Create(&item).Error; err != nil {
+		return RequestService{}, err
+	}
+	return item, nil
+}
+
+func (r *Repository) ApiEditItem(userID uint, sqlQueryID uint, serviceID string, quantity *int, position *int, selectivity *float64) (RequestService, error) {
+	req, err := r.ApiGetSqlQuery(sqlQueryID)
+	if err != nil {
+		return RequestService{}, err
+	}
+	if req.CreatedByID != userID || req.Status != StatusDraft {
+		return RequestService{}, ErrNotAllowed
+	}
+	var item RequestService
+	if err := r.db.First(&item, "request_id = ? AND service_id = ?", sqlQueryID, serviceID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return RequestService{}, ErrNotFound
+		}
+		return RequestService{}, err
+	}
+	if quantity != nil {
+		if *quantity < 1 {
+			return RequestService{}, ErrValidation
+		}
+		item.Quantity = *quantity
+	}
+	if position != nil {
+		if *position < 1 {
+			return RequestService{}, ErrValidation
+		}
+		item.Position = *position
+	}
+	if selectivity != nil {
+		if *selectivity < 0 || *selectivity > 1 {
+			return RequestService{}, ErrValidation
+		}
+		item.Selectivity = *selectivity
+	}
+	if err := r.db.Save(&item).Error; err != nil {
+		return RequestService{}, err
+	}
+	return item, nil
+}
+
+func (r *Repository) ApiDeleteItem(userID uint, sqlQueryID uint, serviceID string) error {
+	req, err := r.ApiGetSqlQuery(sqlQueryID)
+	if err != nil {
+		return err
+	}
+	if req.CreatedByID != userID || req.Status != StatusDraft {
+		return ErrNotAllowed
+	}
+	res := r.db.Delete(&RequestService{}, "request_id = ? AND service_id = ?", sqlQueryID, serviceID)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Repository) ApiFormSqlQuery(userID uint, id uint) (Request, error) {
+	req, err := r.ApiGetSqlQuery(id)
+	if err != nil {
+		return Request{}, err
+	}
+	if req.CreatedByID != userID {
+		return Request{}, ErrNotAllowed
+	}
+	if req.Status != StatusDraft {
+		return Request{}, ErrNotAllowed
+	}
+	if strings.TrimSpace(req.QueryDescription) == "" {
+		return Request{}, ErrValidation
+	}
+	if err := r.db.Preload("Services.Service").First(&req, "id = ?", id).Error; err != nil {
+		return Request{}, err
+	}
+	if len(req.Services) == 0 {
+		return Request{}, ErrValidation
+	}
+
+	// рассчитать результат и записать в БД + записать результат по позициям
+	timeMs, memKB := r.calculateResultTimeAndMemory(&req)
+	for i := range req.Services {
+		rs := &req.Services[i]
+		var speedMs float64
+		if rs.Service != nil {
+			speedMs = parseSpeedMs(rs.Service.Speed)
+		}
+		rs.CalculatedTimeMs = float64(rs.Quantity) * speedMs * (1 + rs.Selectivity)
+		if err := r.db.Model(rs).Update("calculated_time_ms", rs.CalculatedTimeMs).Error; err != nil {
+			return Request{}, err
+		}
+	}
+
+	now := time.Now()
+	req.Status = StatusFormed
+	req.FormedAt = &now
+	req.ResultTime = fmt.Sprintf("%.2fms", timeMs)
+	req.ResultMemory = fmt.Sprintf("%.0fKB", memKB)
+	if err := r.db.Save(&req).Error; err != nil {
+		return Request{}, err
+	}
+	return req, nil
+}
+
+func (r *Repository) ApiFinishSqlQuery(id uint, status string) (Request, error) {
+	req, err := r.ApiGetSqlQuery(id)
+	if err != nil {
+		return Request{}, err
+	}
+	if req.Status != StatusFormed {
+		return Request{}, ErrNotAllowed
+	}
+	if status != StatusFinished && status != StatusRejected {
+		return Request{}, ErrValidation
+	}
+	now := time.Now()
+	mid := ModeratorUserID()
+	req.ModeratorID = &mid
+	req.FinishedAt = &now
+	req.Status = status
+	if err := r.db.Save(&req).Error; err != nil {
+		return Request{}, err
+	}
+	return req, nil
+}
+
+func (r *Repository) GetModeratorAndCreatorLogin(q Request) (creatorLogin, moderatorLogin string, err error) {
+	var creator User
+	if err := r.db.First(&creator, "id = ?", q.CreatedByID).Error; err == nil {
+		if creator.Email != "" {
+			creatorLogin = creator.Email
+		} else {
+			creatorLogin = creator.Name
+		}
+	}
+	if q.ModeratorID != nil {
+		var moderator User
+		if err := r.db.First(&moderator, "id = ?", *q.ModeratorID).Error; err == nil {
+			if moderator.Email != "" {
+				moderatorLogin = moderator.Email
+			} else {
+				moderatorLogin = moderator.Name
+			}
+		}
+	}
+	return creatorLogin, moderatorLogin, nil
+}
+
+func (r *Repository) AddServiceMedia(ctx context.Context, serviceID string, imageFile, videoFile *multipart.FileHeader) (Service, error) {
+	var s Service
+	if err := r.db.First(&s, "id = ? AND status = ?", serviceID, "active").Error; err != nil {
+		return Service{}, ErrNotFound
+	}
+
+	bucket := minioClient.Bucket()
+	if imageFile != nil {
+		key, err := minioClient.UploadFile(ctx, r.mc, bucket, "service_img_"+serviceID, imageFile)
+		if err != nil {
+			return Service{}, err
+		}
+		s.ImageKey = key
+	}
+	if videoFile != nil {
+		key, err := minioClient.UploadFile(ctx, r.mc, bucket, "service_vid_"+serviceID, videoFile)
+		if err != nil {
+			return Service{}, err
+		}
+		s.GifKey = key
+	}
+	if err := r.db.Save(&s).Error; err != nil {
+		return Service{}, err
+	}
+	return s, nil
 }
 
 // parseSpeedMs извлекает число из строки вида "0.3ms" или "1.8ms".
@@ -141,6 +497,42 @@ func (r *Repository) GetServices(filter string) ([]Service, error) {
 		return nil, err
 	}
 	return services, nil
+}
+
+func (r *Repository) CreateService(s Service) error {
+	// не даём создавать deleted
+	s.Status = "active"
+	return r.db.Create(&s).Error
+}
+
+// ApiListSqlQueries возвращает список sql_query для API: исключаем draft и deleted.
+// Фильтруем по статусу и диапазону даты формирования.
+func (r *Repository) ApiListSqlQueries(from, to time.Time, status string) ([]Request, error) {
+	var qs []Request
+	q := r.db.Model(&Request{}).Where("status <> ? AND status <> ?", StatusDraft, StatusDeleted)
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if !from.IsZero() {
+		q = q.Where("formed_at >= ?", from)
+	}
+	if !to.IsZero() {
+		// включительно по дате: +1 день
+		q = q.Where("formed_at < ?", to.Add(24*time.Hour))
+	}
+	if err := q.Order("id desc").Find(&qs).Error; err != nil {
+		return nil, err
+	}
+	return qs, nil
+}
+
+// GetCompletedItemCount считает количество m-m записей с непустым рассчитанным полем.
+func (r *Repository) GetCompletedItemCount(sqlQueryID uint) int {
+	var count int64
+	_ = r.db.Model(&RequestService{}).
+		Where("request_id = ? AND calculated_time_ms IS NOT NULL AND calculated_time_ms <> 0", sqlQueryID).
+		Count(&count).Error
+	return int(count)
 }
 
 // GetService возвращает одну услугу по её ID.

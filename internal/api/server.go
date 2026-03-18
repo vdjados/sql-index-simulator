@@ -53,6 +53,8 @@ func StartServer() {
 	router.LoadHTMLGlob("templates/*")
 	router.Static("/static", "./resources")
 
+	handler.RegisterAPI(router)
+
 	router.GET("/", handler.GetServices)
 	router.GET("/service/:id", handler.GetService)
 	router.GET("/sql_query/:id", handler.GetSqlQuery)

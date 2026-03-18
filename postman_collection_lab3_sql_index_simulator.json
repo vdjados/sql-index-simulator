@@ -1,0 +1,403 @@
+{
+  "info": {
+    "_postman_id": "9b3a6e3e-7a5f-4c3e-8a0e-0d8a7b7f9c11",
+    "name": "LAB3 — SQL Index Simulator (REST API)",
+    "description": "Коллекция под Лабораторную 3. Переменные: baseUrl, service1, service2, cart_id.\n\nbaseUrl по умолчанию: http://localhost:8082\nservice1/service2 — id услуг (индексов) из таблицы services.\ncart_id автоматически подхватывается из GET /api/sql_queries/cart.\n\nПримечание: запрос \"Создать услугу (multipart)\" содержит поля image/video типа file — нужно вручную выбрать файлы в Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01) GET sql_queries list (filter by formed_at; status optional)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries?from-date=2026-01-01&to-date=2026-12-31",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries"
+          ],
+          "query": [
+            { "key": "from-date", "value": "2026-01-01" },
+            { "key": "to-date", "value": "2026-12-31" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "02) GET cart icon (sets cart_id)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "try {",
+              "  const j = pm.response.json();",
+              "  if (j && j.id) {",
+              "    pm.collectionVariables.set('cart_id', String(j.id));",
+              "  } else {",
+              "    pm.collectionVariables.unset('cart_id');",
+              "  }",
+              "} catch (e) {}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/cart",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "cart"
+          ]
+        }
+      }
+    },
+    {
+      "name": "03) DELETE draft sql_query (if exists)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const cartId = pm.collectionVariables.get('cart_id');",
+              "if (!cartId) {",
+              "  pm.test('Skip: no cart_id (nothing to delete)', function () { pm.expect(true).to.eql(true); });",
+              "} else {",
+              "  pm.test('Status is 200/4xx', function () { pm.expect([200,400,403,404]).to.include(pm.response.code); });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "{{cart_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "04) GET services list (with filter)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/services?filter=btree",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "services"
+          ],
+          "query": [
+            { "key": "filter", "value": "btree" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "05) POST create service (multipart: image + video)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "id", "value": "api-demo-index", "type": "text" },
+            { "key": "name", "value": "API Demo Index", "type": "text" },
+            { "key": "table_size", "value": "100k rows", "type": "text" },
+            { "key": "speed", "value": "0.7ms", "type": "text" },
+            { "key": "description", "value": "Создано через REST API (лаба 3).", "type": "text" },
+            { "key": "image", "type": "file", "src": [] },
+            { "key": "video", "type": "file", "src": [] }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/services",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "services"
+          ]
+        }
+      }
+    },
+    {
+      "name": "06) POST add service1 to draft (creates draft if needed)",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_query_items/add/{{service1}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_query_items",
+            "add",
+            "{{service1}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "07) POST add service2 to draft",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_query_items/add/{{service2}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_query_items",
+            "add",
+            "{{service2}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "08) GET cart icon (update cart_id, show count)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "try {",
+              "  const j = pm.response.json();",
+              "  if (j && j.id) pm.collectionVariables.set('cart_id', String(j.id));",
+              "} catch (e) {}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/cart",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "cart"
+          ]
+        }
+      }
+    },
+    {
+      "name": "09) GET sql_query by id (draft with 2 services)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "{{cart_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "10) PUT edit m-m item (quantity/position/selectivity)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"quantity\": 2,\n  \"position\": 1,\n  \"selectivity\": 0.10\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_query_items/{{service1}}/{{cart_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_query_items",
+            "{{service1}}",
+            "{{cart_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "11) PUT edit sql_query (query_description/selectivity)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query_description\": \"SELECT * FROM table WHERE indexed_col = 42\",\n  \"selectivity\": 0.10\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "{{cart_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "12) PUT finish draft (should error: only formed can be finished)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"completed\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}/finish",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "{{cart_id}}",
+            "finish"
+          ]
+        }
+      }
+    },
+    {
+      "name": "13) PUT form sql_query (draft -> formed, computes results)",
+      "request": {
+        "method": "PUT",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}/form",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "{{cart_id}}",
+            "form"
+          ]
+        }
+      }
+    },
+    {
+      "name": "14) PUT finish formed sql_query (moderator completes)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"completed\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}/finish",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries",
+            "{{cart_id}}",
+            "finish"
+          ]
+        }
+      }
+    },
+    {
+      "name": "15) GET sql_queries list (check it appears, not draft/deleted)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql_queries?from-date=2026-01-01&to-date=2026-12-31&status=completed",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql_queries"
+          ],
+          "query": [
+            { "key": "from-date", "value": "2026-01-01" },
+            { "key": "to-date", "value": "2026-12-31" },
+            { "key": "status", "value": "completed" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "16) POST register user",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"new.user@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/users/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "users",
+            "register"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8082" },
+    { "key": "service1", "value": "btree-10k" },
+    { "key": "service2", "value": "gin-500k" },
+    { "key": "cart_id", "value": "" }
+  ]
+}
+

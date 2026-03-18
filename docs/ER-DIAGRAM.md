@@ -1,22 +1,22 @@
 # ER-диаграмма (структура для StarUML)
 
-Предметная область: **SQL Index Simulator** — заявки на симуляцию запросов с выбором индексов (услуг).
+Предметная область: **SQL Index Simulator** — sql_query на симуляцию запросов с выбором индексов (услуг: таблица + индекс).
 
 ---
 
 ## Зачем нужна каждая таблица и что в ней хранится
 
 **users (пользователи)**  
-Нужна, чтобы знать, **кто** создал заявку и кто её завершил (модератор). Хранит: id, имя, email, роль. По заданию у каждого пользователя не больше одной заявки в статусе «черновик» — это проверяется по связи заявки с пользователем (created_by_id). Без таблицы пользователей нельзя привязать заявки к разным людям и различать «свою» корзину.
+Нужна, чтобы знать, **кто** создал sql_query. Хранит: id, имя, email, роль. У каждого пользователя не больше одного sql_query в статусе «черновик» (корзина). Без таблицы пользователей нельзя привязать sql_query к разным людям.
 
 **services (услуги)**  
-Справочник **типов индексов** (B-tree, Hash, GIN и т.д.), которые можно добавить в заявку. Хранит: id, название, описание, статус (действует/удалён), ссылки на картинку и GIF, размер таблицы, время (speed). Это то, что показывается на главной странице и в карточке «Добавить в заявку». Наполняется через Adminer (или seed), приложение только читает и использует при расчёте формулы (speed).
+Справочник **типов индексов** (таблица + индекс, размер таблицы). Хранит: id, название, описание, статус, ссылки на картинку и GIF, размер таблицы, время (speed). Показывается на главной и в «Добавить в запрос». Наполняется через Adminer (или seed).
 
-**requests (заявки)**  
-Одна строка = **одна заявка** пользователя (симуляция запроса): черновик, удалённая, сформированная, завершённая или отклонённая. Хранит: id, статус, даты создания/формирования/завершения, создателя и модератора, селективность, рассчитанные время и память. Черновик по сути и есть «корзина» — в неё через м-м добавляются выбранные услуги. После «Завершить заявку» сюда записываются результат расчёта (result_time, result_memory) и дата завершения.
+**requests (sql_query)**  
+Одна строка = **один sql_query** (симуляция запроса): черновик (корзина), удалённый, завершённый и т.д. Хранит: id, статус, даты, создателя, описание запроса текстом (query_description), селективность (м-м), результат — время и память запроса (result_time, result_memory). В корзину через м-м добавляются выбранные услуги.
 
-**request_services (заявка–услуга, м-м)**  
-Связывает заявки и услуги: **какие индексы и в каком количестве** входят в заявку. Хранит: пару (request_id, service_id), дублирующие поля для отображения (название, размер, селективность, картинка), количество, порядок, признак «главный», рассчитанное время по позиции (calculated_time_ms). Одна и та же услуга в одной заявке — одна строка с увеличенным quantity. Без этой таблицы нельзя было бы хранить несколько услуг в одной заявке и считать по формуле вклад каждой позиции.
+**request_services (sql_query–услуга, м-м)**  
+Связывает sql_query и услуги: **какие индексы и в каком количестве** входят в запрос. Хранит: пару (request_id, service_id), название, размер таблицы, селективность (м-м), количество, порядок, рассчитанное время по позиции (результат в м-м). Одна и та же услуга в одном sql_query — одна строка с увеличенным quantity.
 
 ---
 
@@ -48,20 +48,21 @@
 
 ---
 
-### 3. **requests** (Заявки)
+### 3. **requests** (sql_query)
 
-| Столбец       | Тип      | Длина | Not Null | PK | FK      | Описание           |
-|---------------|-----------|-------|----------|----|---------|--------------------|
-| id            | INTEGER   | —     | ✓        | ✓  |         | Идентификатор      |
-| status        | VARCHAR   | 32    | ✓        |    |         | draft/deleted/formed/completed/rejected |
-| created_at    | TIMESTAMP | —     | ✓        |    |         | Дата создания      |
-| created_by_id | INTEGER   | —     | ✓        |    | →users  | Создатель          |
-| formed_at     | TIMESTAMP | —     | —        |    |         | Дата формирования  |
-| finished_at   | TIMESTAMP | —     | —        |    |         | Дата завершения    |
-| moderator_id  | INTEGER   | —     | —        |    | →users  | Модератор          |
-| selectivity   | NUMERIC   | —     | ✓        |    |         | Селективность      |
-| result_time   | VARCHAR   | 64    | —        |    |         | Рассчитанное время |
-| result_memory | VARCHAR   | 64    | —        |    |         | Рассчитанная память|
+| Столбец            | Тип      | Длина | Not Null | PK | FK      | Описание                |
+|--------------------|-----------|-------|----------|----|---------|--------------------------|
+| id                 | INTEGER   | —     | ✓        | ✓  |         | Идентификатор            |
+| status             | VARCHAR   | 32    | ✓        |    |         | draft/deleted/formed/completed/rejected |
+| created_at         | TIMESTAMP | —     | ✓        |    |         | Дата создания            |
+| created_by_id      | INTEGER   | —     | ✓        |    | →users  | Создатель                |
+| formed_at          | TIMESTAMP | —     | —        |    |         | Дата формирования       |
+| finished_at        | TIMESTAMP | —     | —        |    |         | Дата завершения          |
+| moderator_id       | INTEGER   | —     | —        |    | →users  | Модератор                |
+| query_description  | TEXT      | —     | —        |    |         | Описание запроса (Заявка)|
+| selectivity        | NUMERIC   | —     | ✓        |    |         | Селективность (м-м)      |
+| result_time        | VARCHAR   | 64    | —        |    |         | Время запроса            |
+| result_memory      | VARCHAR   | 64    | —        |    |         | Память запроса           |
 
 **Внешние ключи:**  
 - created_by_id → users(id)  
@@ -70,20 +71,20 @@
 
 ---
 
-### 4. **request_services** (Связь заявка–услуга, м-м)
+### 4. **request_services** (Связь sql_query–услуга, м-м)
 
 | Столбец            | Тип     | Длина | Not Null | PK | FK        | Описание                |
 |--------------------|---------|-------|----------|----|-----------|-------------------------|
-| request_id         | INTEGER | —     | ✓        | ✓  | →requests | Заявка                  |
-| service_id         | VARCHAR | 64    | ✓        | ✓  | →services | Услуга                  |
+| request_id         | INTEGER | —     | ✓        | ✓  | →requests | sql_query               |
+| service_id         | VARCHAR | 64    | ✓        | ✓  | →services | Услуга (таблица+индекс) |
 | service_name       | VARCHAR | 255   | ✓        |    |           | Дублирование названия   |
-| table_size         | VARCHAR | 64    | ✓        |    |           | Дублирование размера    |
-| selectivity        | NUMERIC | —     | ✓        |    |           | Селективность по позиции|
+| table_size         | VARCHAR | 64    | ✓        |    |           | Размер таблицы          |
+| selectivity        | NUMERIC | —     | ✓        |    |           | Селективность (м-м)    |
 | image_key          | VARCHAR | 255   | —        |    |           | Картинка                |
 | quantity           | INTEGER | —     | ✓        |    |           | Количество              |
-| position           | INTEGER | —     | ✓        |    |           | Порядок в заявке       |
-| is_main            | BOOLEAN | —     | ✓        |    |           | Главная позиция        |
-| calculated_time_ms | NUMERIC | (10,2)| —        |    |           | Рассчитанное время (при завершении) |
+| position           | INTEGER | —     | ✓        |    |           | Порядок в sql_query     |
+| is_main            | BOOLEAN | —     | ✓        |    |           | Главная позиция         |
+| calculated_time_ms | NUMERIC | (10,2)| —        |    |           | Время (результат в м-м)  |
 
 **Составной первичный ключ:** (request_id, service_id).  
 **Внешние ключи:**  
@@ -97,9 +98,9 @@
 
 | Связь                    | Тип        | Участники              | Описание                          |
 |--------------------------|------------|------------------------|-----------------------------------|
-| users — requests         | 1 : N      | users (1) — requests (N) | Один пользователь — много заявок. Со стороны requests: created_by_id, moderator_id. |
-| requests — request_services | 1 : N   | requests (1) — request_services (N) | Одна заявка — много позиций. FK: request_id. |
-| services — request_services | 1 : N  | services (1) — request_services (N) | Одна услуга может быть в многих заявках. FK: service_id. |
+| users — requests         | 1 : N      | users (1) — requests (N) | Один пользователь — много sql_query. Со стороны requests: created_by_id, moderator_id. |
+| requests — request_services | 1 : N   | requests (1) — request_services (N) | Один sql_query — много позиций. FK: request_id. |
+| services — request_services | 1 : N  | services (1) — request_services (N) | Одна услуга может быть в многих sql_query. FK: service_id. |
 | request_services        | —          | —                      | Связующая таблица м-м между requests и services. |
 
 Итог: **users** и **services** — независимые сущности; **requests** связана с **users** (создатель, модератор); **request_services** реализует связь **requests** ↔ **services** (м-м) с атрибутами quantity, position, is_main, calculated_time_ms.
@@ -114,8 +115,8 @@
 2. **Services**  
    id (PK), name, description, status, image_key, gif_key, table_size, speed.
 
-3. **Requests**  
-   id (PK), status, created_at, created_by_id (FK→Users), formed_at, finished_at, moderator_id (FK→Users), selectivity, result_time, result_memory.
+3. **Requests** (sql_query)  
+   id (PK), status, created_at, created_by_id (FK→Users), formed_at, finished_at, moderator_id (FK→Users), query_description, selectivity, result_time, result_memory.
 
 4. **Request_services**  
    (request_id (PK,FK→Requests), service_id (PK,FK→Services)), service_name, table_size, selectivity, image_key, quantity, position, is_main, calculated_time_ms.

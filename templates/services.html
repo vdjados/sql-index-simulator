@@ -9,14 +9,6 @@
                 <img src="http://localhost:9000/sql-index/logo.png" alt="SQL Index Simulator">
                 <span class="header-title">SQL Index Simulator</span>
             </a>
-            <div class="header-actions">
-                {{ if .request }}
-                <a href="/request/{{ .request.ID }}" class="cart-icon" aria-label="Запрос">
-                    <span class="cart-icon-symbol">🧺</span>
-                    <span class="cart-badge">{{ .cartCount }}</span>
-                </a>
-                {{ end }}
-            </div>
         </header>
 
         <main class="page">
@@ -31,8 +23,18 @@
                     >
                     <button type="submit" class="search-btn">Найти</button>
                 </form>
+                {{ if .request }}
+                <a href="/sql_query/{{ .request.ID }}" class="cart-icon" aria-label="Корзина">
+                    <span class="cart-icon-symbol">🧺</span>
+                    <span class="cart-badge">{{ .cartCount }}</span>
+                </a>
+                {{ else }}
+                <span class="cart-icon cart-icon--empty" aria-label="Корзина пуста">
+                    <span class="cart-icon-symbol">🧺</span>
+                    <span class="cart-badge cart-badge--empty">0</span>
+                </span>
+                {{ end }}
             </section>
-
             <section class="cards-grid">
                 {{ range .services }}
                 <div class="service-card">
@@ -48,16 +50,11 @@
                     <div class="service-card-body">
                         <h1 class="service-card-title">{{ .Name }}</h1>
                         <div class="service-metrics">
-                            <span class="service-metric-pill">
-                                Таблица: {{ .TableSize }}
-                            </span>
-                            <span class="service-metric-pill">
-                                Время: {{ .Speed }}
-                            </span>
+                            <span class="service-metric-pill">Таблица + Индекс: {{ .TableSize }}</span>
                         </div>
-                        <form action="/request/add" method="POST" class="service-add-form">
+                        <form action="/sql_query/add" method="POST" class="service-add-form">
                             <input type="hidden" name="service_id" value="{{ .ID }}">
-                            <button type="submit" class="search-btn">Добавить в заявку</button>
+                            <button type="submit" class="search-btn">Добавить в запрос</button>
                         </form>
                     </div>
                 </div>

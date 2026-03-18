@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Статусы заявок
+// Статусы sql_query
 const (
 	StatusDraft    = "draft"
 	StatusDeleted  = "deleted"
@@ -45,7 +45,7 @@ type Service struct {
 	Status      string `gorm:"size:32;not null;default:'active'"` // active / deleted
 }
 
-// Request описывает заявку (симуляцию запроса) и её сводный результат.
+// Request описывает sql_query (симуляцию запроса) и её сводный результат.
 type Request struct {
 	ID uint `gorm:"primaryKey"`
 
@@ -59,14 +59,15 @@ type Request struct {
 
 	ModeratorID *uint
 
-	Selectivity  float64 `gorm:"not null"`
-	ResultTime   string  `gorm:"size:64"`
-	ResultMemory string  `gorm:"size:64"`
+	QueryDescription string  `gorm:"type:text"` // описание запроса текстом (поле Заявка)
+	Selectivity      float64 `gorm:"not null"`  // селективность в запросе (м-м)
+	ResultTime       string  `gorm:"size:64"`   // время запроса
+	ResultMemory     string  `gorm:"size:64"`   // память запроса
 
 	Services []RequestService `gorm:"foreignKey:RequestID"`
 }
 
-// RequestService описывает связь m-n между заявкой и услугой.
+// RequestService описывает связь м-м между sql_query и услугой (таблица+индекс).
 // Составной уникальный ключ (request_id, service_id). При завершении заявки заполняется CalculatedTimeMs.
 type RequestService struct {
 	RequestID uint   `gorm:"primaryKey"`
@@ -201,8 +202,8 @@ func (r *Repository) GetCurrentRequest(userID uint) (*Request, error) {
 	return &req, nil
 }
 
-// AddServiceToDraft добавляет услугу в текущую заявку-проект пользователя.
-// Если черновика нет, он создаётся. Возвращает итоговую заявку.
+// AddServiceToDraft добавляет услугу (таблица+индекс) в текущий sql_query (черновик) пользователя.
+// Если черновика нет, он создаётся. Возвращает итоговый sql_query.
 func (r *Repository) AddServiceToDraft(userID uint, serviceID string) (*Request, error) {
 	var service Service
 	if err := r.db.First(&service, "id = ? AND status = ?", serviceID, "active").Error; err != nil {
@@ -277,7 +278,7 @@ func (r *Repository) DeleteRequestLogical(userID uint, requestID uint) error {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("заявка не найдена или недоступна для удаления")
+		return fmt.Errorf("sql_query не найден или недоступен для удаления")
 	}
 	return nil
 }
@@ -288,15 +289,15 @@ func (r *Repository) CompleteRequest(userID uint, requestID uint) error {
 	var req Request
 	if err := r.db.Preload("Services.Service").First(&req, "id = ? AND created_by_id = ?", requestID, userID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return fmt.Errorf("заявка не найдена")
+			return fmt.Errorf("sql_query не найден")
 		}
 		return err
 	}
 	if req.Status != StatusDraft {
-		return fmt.Errorf("завершить можно только заявку в статусе черновик")
+		return fmt.Errorf("завершить можно только sql_query в статусе черновик")
 	}
 	if len(req.Services) == 0 {
-		return fmt.Errorf("в заявке нет услуг")
+		return fmt.Errorf("в sql_query нет услуг")
 	}
 
 	timeMs, memKB := r.calculateResultTimeAndMemory(&req)

@@ -10,42 +10,28 @@
                 <span class="header-title">SQL Index Simulator</span>
             </a>
         </header>
-
-        <main class="page">
-            <div class="detail-wrapper">
-                <article class="detail-card">
-                    <div class="card-accent-bar"></div>
-                    <div class="detail-card__gif-wrapper">
-                        <img
-                            src="http://localhost:9000/sql-index/{{ .service.GifKey }}"
-                            alt="{{ .service.Name }} GIF"
-                            class="detail-card__gif"
-                        >
+        <div class="detail-wrapper">
+            <div class="detail-card">
+                <div class="detail-card__gif-wrap">
+                    <img
+                        src="http://localhost:9000/sql-index/{{ .service.GifKey }}"
+                        alt="{{ .service.Name }}"
+                        class="detail-card__gif"
+                    >
+                </div>
+                <div class="detail-card__body">
+                    <h1 class="detail-card__title">{{ .service.Name }}</h1>
+                    <div class="detail-card__badges">
+                        <span class="detail-card__badge detail-card__badge--table">Таблица: {{ .service.TableSize }}</span>
+                        <span class="detail-card__badge detail-card__badge--speed">Скорость: {{ .service.Speed }}</span>
                     </div>
-                    <div class="detail-card__body">
-                        <h1 class="detail-card__title">{{ .service.Name }}</h1>
-                        <p class="detail-card__meta">
-                            <strong>Размер таблицы:</strong> {{ .service.TableSize }}
-                        </p>
-                        <p class="detail-card__meta">
-                            <strong>Скорость выполнения:</strong> {{ .service.Speed }}
-                        </p>
-                        <p class="detail-card__description">
-                            {{ .service.Description }}
-                        </p>
-
-                        <hr class="detail-card__separator">
-
-                        <h2 class="detail-card__section-title">Технические характеристики</h2>
-                        <ul class="detail-card__list">
-                            <li><strong>Структура:</strong> специализированный индекс {{ .service.Name }} для оптимизации доступа к данным.</li>
-                            <li><strong>Сложность:</strong> логарифмический или близкий к константному поиск в зависимости от типа индекса.</li>
-                            <li><strong>Поддерживаемые операции:</strong> выборка по условию WHERE, фильтрация по диапазонам, комбинирование условий в запросе.</li>
-                        </ul>
-                    </div>
-                </article>
+                    <p class="detail-card__description">{{ .service.Description }}</p>
+                    <form method="POST" action="/sql_query/add" class="detail-card__form">
+                        <input type="hidden" name="service_id" value="{{ .service.ID }}">
+                        <button type="submit" class="search-btn">Добавить в запрос</button>
+                    </form>
+                </div>
             </div>
-        </main>
+        </div>
     </body>
 </html>
-

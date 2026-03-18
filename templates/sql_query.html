@@ -1,0 +1,68 @@
+<html lang="ru">
+    <head>
+        <title>sql_query № {{ .sql_query.ID }} — SQL Index Simulator</title>
+        <link rel="stylesheet" href="/static/styles/index_style.css">
+    </head>
+    <body>
+        <header class="header-secondary">
+            <a href="/" class="header-logo">
+                <img src="http://localhost:9000/sql-index/logo.png" alt="SQL Index Simulator">
+                <span class="header-title">SQL Index Simulator</span>
+            </a>
+        </header>
+
+        <main class="page">
+            <div class="application-detail">
+                <section class="request-header-card">
+                    <h1 class="request-title">sql_query № {{ .sql_query.ID }}</h1>
+                    <div class="request-meta">
+                        <div><strong>Описание запроса:</strong> {{ if .sql_query.QueryDescription }}{{ .sql_query.QueryDescription }}{{ else }}—{{ end }}</div>
+                        <div><strong>Селективность (м-м):</strong> {{ printf "%.2f" .sql_query.Selectivity }}</div>
+                        <div><strong>Время запроса:</strong> {{ .sql_query.ResultTime }}</div>
+                        <div><strong>Память запроса:</strong> {{ .sql_query.ResultMemory }}</div>
+                    </div>
+                    <div style="margin-top: 16px;">
+                        <form action="/sql_query/{{ .sql_query.ID }}/delete" method="POST">
+                            <button type="submit" class="search-btn">Удалить запрос</button>
+                        </form>
+                    </div>
+                </section>
+
+                <section class="request-services">
+                    <table class="request-table">
+                        <thead>
+                            <tr>
+                                <th>Услуга (Таблица + Индекс)</th>
+                                <th>Размер таблицы</th>
+                                <th>м-м (селективность)</th>
+                                {{ if eq .sql_query.Status "completed" }}<th>Время (мс)</th>{{ end }}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .sql_query.Services }}
+                            {{ $svc := . }}
+                            {{ range seq $svc.Quantity }}
+                            <tr>
+                                <td>
+                                    <div class="request-table-index">
+                                        <img
+                                            src="http://localhost:9000/sql-index/{{ $svc.ImageKey }}"
+                                            alt="{{ $svc.ServiceName }}"
+                                            class="request-service-image"
+                                        >
+                                        <span class="request-service-title">{{ $svc.ServiceName }}</span>
+                                    </div>
+                                </td>
+                                <td>{{ $svc.TableSize }}</td>
+                                <td>{{ printf "%.2f" $svc.Selectivity }}</td>
+                                {{ if eq $.sql_query.Status "completed" }}<td>{{ printf "%.2f" $svc.CalculatedTimeMs }}</td>{{ end }}
+                            </tr>
+                            {{ end }}
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+        </main>
+    </body>
+</html>

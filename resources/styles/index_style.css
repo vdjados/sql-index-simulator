@@ -42,6 +42,9 @@ img {
     width: 100%;
     padding: 0 32px;
     height: 72px;
+    min-height: 72px;
+    flex-shrink: 0;
+    box-sizing: border-box;
     background: linear-gradient(90deg, #2ECC71, #3498DB);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
@@ -70,6 +73,11 @@ img {
     gap: 16px;
 }
 
+.search-section .cart-icon {
+    background-color: rgba(46, 204, 113, 0.15);
+    color: #2C3E50;
+}
+
 .cart-icon {
     position: relative;
     display: inline-flex;
@@ -79,6 +87,7 @@ img {
     height: 40px;
     border-radius: 999px;
     background-color: rgba(255, 255, 255, 0.12);
+    text-decoration: none;
 }
 
 .cart-icon-symbol {
@@ -102,10 +111,37 @@ img {
     justify-content: center;
 }
 
+.search-section .cart-icon--empty {
+    cursor: default;
+    background-color: #E9ECEF;
+    pointer-events: none;
+}
+
+.search-section .cart-icon--empty .cart-icon-symbol {
+    opacity: 0.6;
+}
+
+.cart-icon--empty {
+    cursor: default;
+    background-color: rgba(255, 255, 255, 0.06);
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.cart-icon--empty .cart-icon-symbol {
+    opacity: 0.8;
+}
+
+.cart-badge--empty {
+    background-color: #ADB5BD;
+    color: #FFFFFF;
+}
+
 .search-section {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 32px;
 }
 
@@ -113,6 +149,7 @@ img {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex: 1;
 }
 
 .search-input {
@@ -315,34 +352,36 @@ img {
     background: linear-gradient(90deg, #2ECC71, #3498DB);
 }
 
+/* ===== Детальная карточка индекса (как в примере rip2026) ===== */
+
 .detail-wrapper {
-    max-width: 840px;
-    margin: 32px auto;
+    max-width: 400px;
+    margin: 30px auto 60px;
+    padding: 0 20px;
 }
 
 .detail-card {
     background-color: #FFFFFF;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 16px;
+    border: 1px solid #E1E4E8;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
     overflow: hidden;
 }
 
-.detail-card__gif-wrapper {
+/* Контейнер GIF 2:3 (портрет, вертикально — как в wibes) */
+.detail-card__gif-wrap {
+    aspect-ratio: 2 / 3;
     width: 100%;
-    height: 260px;
-    min-height: 260px;
     overflow: hidden;
+    background-color: #E5EAF0;
 }
 
 .detail-card__gif {
     width: 100%;
     height: 100%;
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: cover;
-    object-position: center;
-    background-color: #E5EAF0;
     display: block;
+    object-fit: cover;
+    object-position: center center;
 }
 
 .detail-card__body {
@@ -350,33 +389,62 @@ img {
 }
 
 .detail-card__title {
-    font-size: 22px;
-    font-weight: 600;
-    margin-bottom: 8px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #2C3E50;
+    margin-bottom: 12px;
 }
 
-.detail-card__meta {
-    font-size: 14px;
-    color: #526170;
+.detail-card__badges {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.detail-card__badge {
+    padding: 5px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.detail-card__badge--table {
+    background: rgba(46, 204, 113, 0.15);
+    color: #27AE60;
+}
+
+.detail-card__badge--speed {
+    background: rgba(52, 152, 219, 0.15);
+    color: #2980B9;
 }
 
 .detail-card__description {
-    margin-top: 14px;
-    font-size: 14px;
-    color: #2C3E50;
+    font-size: 0.9rem;
+    color: #526170;
     line-height: 1.6;
+    margin-bottom: 0;
+}
+
+.detail-card__form {
+    margin-top: 24px;
+}
+
+.detail-card__form .search-btn {
+    width: 100%;
 }
 
 .detail-card__separator {
     border: none;
     border-top: 1px solid #E1E4E8;
-    margin: 20px 0;
+    margin: 24px 0;
 }
 
 .detail-card__section-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 8px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2C3E50;
+    margin-bottom: 12px;
 }
 
 .detail-card__list {

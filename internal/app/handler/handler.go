@@ -53,13 +53,14 @@ func (h *Handler) GetServices(ctx *gin.Context) {
 }
 
 // GetService показывает детальную информацию об одном индексе по его ID.
+// Если индекс не найден — редирект на главную.
 func (h *Handler) GetService(ctx *gin.Context) {
 	id := ctx.Param("id")
 
 	service, err := h.Repository.GetService(id)
 	if err != nil {
 		logrus.Error(err)
-		ctx.String(http.StatusNotFound, fmt.Sprintf("service %s not found", id))
+		ctx.Redirect(http.StatusSeeOther, "/")
 		return
 	}
 
@@ -68,12 +69,12 @@ func (h *Handler) GetService(ctx *gin.Context) {
 	})
 }
 
-// GetRequest показывает состав запроса: селективность, готовый результат и список индексов.
-func (h *Handler) GetRequest(ctx *gin.Context) {
+// GetSqlQuery показывает состав sql_query: селективность, результат (время и память) и список индексов.
+func (h *Handler) GetSqlQuery(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	idUint64, err := strconv.ParseUint(idParam, 10, 64)
 	if err != nil {
-		ctx.String(http.StatusBadRequest, fmt.Sprintf("invalid request id %s", idParam))
+		ctx.Redirect(http.StatusSeeOther, "/")
 		return
 	}
 	id := uint(idUint64)
@@ -81,17 +82,17 @@ func (h *Handler) GetRequest(ctx *gin.Context) {
 	req, err := h.Repository.GetRequest(id)
 	if err != nil {
 		logrus.Error(err)
-		ctx.String(http.StatusNotFound, fmt.Sprintf("request %d not found", id))
+		ctx.Redirect(http.StatusSeeOther, "/")
 		return
 	}
 
-	ctx.HTML(http.StatusOK, "request.html", gin.H{
-		"request": req,
+	ctx.HTML(http.StatusOK, "sql_query.html", gin.H{
+		"sql_query": req,
 	})
 }
 
-// AddToRequest добавляет услугу в текущую заявку (черновик) пользователя через ORM.
-func (h *Handler) AddToRequest(ctx *gin.Context) {
+// AddToSqlQuery добавляет индекс (услугу) в текущий sql_query (черновик) пользователя через ORM.
+func (h *Handler) AddToSqlQuery(ctx *gin.Context) {
 	serviceID := ctx.PostForm("service_id")
 	if serviceID == "" {
 		ctx.String(http.StatusBadRequest, "service_id is required")
@@ -109,12 +110,12 @@ func (h *Handler) AddToRequest(ctx *gin.Context) {
 	ctx.Redirect(http.StatusSeeOther, "/")
 }
 
-// DeleteRequest логически удаляет заявку через raw SQL UPDATE (без ORM).
-func (h *Handler) DeleteRequest(ctx *gin.Context) {
+// DeleteSqlQuery удаляет sql_query через raw SQL UPDATE (без ORM).
+func (h *Handler) DeleteSqlQuery(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	idUint64, err := strconv.ParseUint(idParam, 10, 64)
 	if err != nil {
-		ctx.String(http.StatusBadRequest, fmt.Sprintf("invalid request id %s", idParam))
+		ctx.Redirect(http.StatusSeeOther, "/")
 		return
 	}
 	requestID := uint(idUint64)
@@ -129,23 +130,6 @@ func (h *Handler) DeleteRequest(ctx *gin.Context) {
 	ctx.Redirect(http.StatusSeeOther, "/")
 }
 
-// CompleteRequest завершает заявку: считает по формуле время/память и сохраняет в БД.
-func (h *Handler) CompleteRequest(ctx *gin.Context) {
-	idParam := ctx.Param("id")
-	idUint64, err := strconv.ParseUint(idParam, 10, 64)
-	if err != nil {
-		ctx.String(http.StatusBadRequest, fmt.Sprintf("invalid request id %s", idParam))
-		return
-	}
-	requestID := uint(idUint64)
-	const userID = 1
-
-	if err := h.Repository.CompleteRequest(userID, requestID); err != nil {
-		h.errorHandler(ctx, http.StatusBadRequest, err)
-		return
-	}
-	ctx.Redirect(http.StatusSeeOther, "/request/"+idParam)
-}
 
 func (h *Handler) errorHandler(ctx *gin.Context, errorStatusCode int, err error) {
 	logrus.Error(err.Error())

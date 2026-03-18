@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,18 @@ import (
 	"web_backend/internal/app/repository"
 )
 
+// seq возвращает срез [0, 1, ..., n-1] для итерации в шаблоне (например, дублирование строк по количеству).
+func seq(n int) []int {
+	if n <= 0 {
+		return nil
+	}
+	s := make([]int, n)
+	for i := range s {
+		s[i] = i
+	}
+	return s
+}
+
 func StartServer() {
 	log.Println("Starting server")
 
@@ -23,6 +36,7 @@ func StartServer() {
 
 	router.SetFuncMap(template.FuncMap{
 		"printf": fmt.Sprintf,
+		"seq":    seq,
 	})
 
 	postgresString := dsn.FromEnv()
@@ -41,10 +55,14 @@ func StartServer() {
 
 	router.GET("/", handler.GetServices)
 	router.GET("/service/:id", handler.GetService)
-	router.GET("/request/:id", handler.GetRequest)
-	router.POST("/request/add", handler.AddToRequest)
-	router.POST("/request/:id/delete", handler.DeleteRequest)
-	router.POST("/request/:id/complete", handler.CompleteRequest)
+	router.GET("/sql_query/:id", handler.GetSqlQuery)
+	router.POST("/sql_query/add", handler.AddToSqlQuery)
+	router.POST("/sql_query/:id/delete", handler.DeleteSqlQuery)
+
+	// Любой неизвестный путь — редирект на главную (без страницы "not found")
+	router.NoRoute(func(c *gin.Context) {
+		c.Redirect(http.StatusSeeOther, "/")
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -5,9 +5,9 @@
 - **PostgreSQL** подключается по DSN из переменных окружения (или из файла `.env`). Строка подключения собирается в `internal/app/dsn/dsn.go` (host, port, user, password, dbname).
 - **GORM** используется как ORM: модели в `internal/app/repository/repository.go`, при старте приложения выполняется `AutoMigrate` — создаются/обновляются таблицы `users`, `services`, `requests`, `request_services`.
 - **Пять HTTP-методов** (как в задании):
-  - **3 GET** (через ORM): главная с поиском услуг, страница одной услуги, страница одной заявки.
-  - **2 POST**: добавление услуги в заявку (ORM), логическое удаление заявки (raw SQL `UPDATE`), завершение заявки с расчётом по формуле (ORM).
-- **Расчёт по формуле**: время = Σ (quantity × t_i × (1 + selectivity)); при отображении заявки значения считаются «на лету», при нажатии «Завершить заявку» — записываются в БД (в `requests` и в `request_services.calculated_time_ms`).
+  - **3 GET** (через ORM): главная с поиском услуг, страница одной услуги, страница одного sql_query.
+  - **2 POST**: добавление услуги в sql_query (ORM), удаление sql_query (raw SQL `UPDATE`).
+- **Результат в м-м**: время и память запроса считаются по формуле при отображении и сохраняются в БД при завершении (в `requests` и в `request_services.calculated_time_ms`).
 
 ---
 
@@ -17,10 +17,10 @@
 
 | Таблица            | Назначение |
 |--------------------|------------|
-| **users**          | Пользователи (создатель заявки, модератор). |
+| **users**          | Пользователи (создатель sql_query, модератор). |
 | **services**       | Услуги = типы индексов (B-tree, Hash, GIN и т.д.). |
-| **requests**       | Заявки = симуляции запроса (корзина = черновик). |
-| **request_services** | Связь «заявка – услуга» (м-м): какие индексы и в каком количестве входят в заявку. |
+| **requests**       | sql_query = симуляции запроса (корзина = черновик). |
+| **request_services** | Связь «sql_query – услуга» (м-м): какие индексы и в каком количестве входят в sql_query. |
 
 ### 2.1. Таблица `users`
 
@@ -56,22 +56,23 @@
 
 | Столбец       | Тип            | Описание |
 |---------------|----------------|----------|
-| id            | integer (PK)   | Идентификатор заявки. |
-| status        | varchar(32)    | Статус: `draft`, `deleted`, `formed`, `completed`, `rejected`. |
-| created_at    | timestamp      | Дата создания. |
-| created_by_id | integer (FK→users) | Кто создал. |
-| formed_at     | timestamp NULL | Дата формирования (по заданию — 2 действия создателя). |
-| finished_at   | timestamp NULL | Дата завершения (2 действия модератора). |
-| moderator_id  | integer NULL   | Модератор. |
-| selectivity   | numeric        | Селективность (используется в формуле). |
-| result_time   | varchar(64)    | Рассчитанное время (например `1.25ms`), заполняется при завершении. |
-| result_memory | varchar(64)   | Рассчитанная память (например `96KB`). |
+| id                 | integer (PK)   | Идентификатор sql_query. |
+| status             | varchar(32)    | Статус: `draft`, `deleted`, `formed`, `completed`, `rejected`. |
+| created_at         | timestamp      | Дата создания. |
+| created_by_id      | integer (FK→users) | Кто создал. |
+| formed_at          | timestamp NULL | Дата формирования. |
+| finished_at        | timestamp NULL | Дата завершения. |
+| moderator_id       | integer NULL   | Модератор. |
+| query_description  | text           | Описание запроса текстом (поле Заявка). |
+| selectivity        | numeric        | Селективность в запросе (м-м). |
+| result_time        | varchar(64)    | Время запроса. |
+| result_memory      | varchar(64)    | Память запроса. |
 
 **Где пишется:**
 
-- **INSERT:** при первом «Добавить в заявку», если у пользователя ещё нет черновика — создаётся новая строка в `requests` со статусом `draft`, заполняются `created_at`, `created_by_id`, `selectivity` (код: `AddServiceToDraft` в `repository.go`).
-- **UPDATE (ORM):** при «Завершить заявку» — обновляются `status` → `completed`, `result_time`, `result_memory`, `finished_at` (`CompleteRequest`).
-- **UPDATE (raw SQL):** при «Логически удалить заявку» — один запрос `UPDATE requests SET status = 'deleted' WHERE id = ? AND created_by_id = ?` (`DeleteRequestLogical`).
+- **INSERT:** при первом «Добавить в запрос», если у пользователя ещё нет черновика — создаётся новая строка в `requests` со статусом `draft`, заполняются `created_at`, `created_by_id`, `selectivity` (код: `AddServiceToDraft` в `repository.go`).
+- **UPDATE (ORM):** при завершении расчёта — обновляются `status` → `completed`, `result_time`, `result_memory`, `finished_at` (`CompleteRequest`).
+- **UPDATE (raw SQL):** при «Удалить запрос» — один запрос `UPDATE requests SET status = 'deleted' WHERE id = ? AND created_by_id = ?` (`DeleteRequestLogical`).
 
 ---
 
@@ -79,24 +80,24 @@
 
 | Столбец             | Тип            | Описание |
 |---------------------|----------------|----------|
-| request_id          | integer (PK, FK→requests) | Заявка. |
-| service_id          | varchar(64) (PK, FK→services) | Услуга. |
+| request_id          | integer (PK, FK→requests) | sql_query. |
+| service_id          | varchar(64) (PK, FK→services) | Услуга (таблица + индекс). |
 | service_name        | varchar(255)   | Дублирование для отображения. |
-| table_size          | varchar(64)    | То же. |
-| selectivity         | numeric        | Селективность по позиции. |
+| table_size          | varchar(64)    | Размер таблицы. |
+| selectivity         | numeric        | Селективность в запросе (м-м). |
 | image_key           | varchar(255)   | Картинка. |
-| quantity            | integer        | Количество (при повторном добавлении той же услуги увеличивается). |
-| position            | integer        | Порядок в заявке. |
+| quantity            | integer        | Количество. |
+| position            | integer        | Порядок в sql_query. |
 | is_main             | boolean        | Первая позиция = главная. |
-| calculated_time_ms  | numeric(10,2)  | Рассчитанное время по формуле для этой позиции; заполняется при завершении заявки. |
+| calculated_time_ms  | numeric(10,2)  | Время по позиции (результат в м-м). |
 
-Составной первичный ключ: `(request_id, service_id)` — одна и та же услуга в одной заявке не дублируется строкой, меняется только `quantity`.
+Составной первичный ключ: `(request_id, service_id)` — одна и та же услуга в одном sql_query не дублируется строкой, меняется только `quantity`.
 
 **Где пишется:**
 
-- **INSERT:** при нажатии «Добавить в заявку», если такой пары (request_id, service_id) ещё нет — создаётся новая строка в `request_services` с полями из заявки и услуги (`AddServiceToDraft`).
+- **INSERT:** при нажатии «Добавить в запрос», если такой пары (request_id, service_id) ещё нет — создаётся новая строка в `request_services` с полями из sql_query и услуги (`AddServiceToDraft`).
 - **UPDATE:** если пара уже есть — увеличивается `quantity` в той же строке (`AddServiceToDraft`).
-- **UPDATE:** при «Завершить заявку» для каждой строки этой заявки заполняется `calculated_time_ms` по формуле: quantity × speed_i × (1 + selectivity) (`CompleteRequest`).
+- **UPDATE:** при завершении расчёта для каждой строки заполняется `calculated_time_ms` (`CompleteRequest`).
 
 Каскадное удаление отключено (по умолчанию внешние ключи без ON DELETE CASCADE).
 
@@ -108,13 +109,12 @@
 |----------------------------|--------------------|----------|
 | Запуск приложения          | все 4 таблицы      | AutoMigrate (создание/обновление схемы). |
 | Наполнение через Adminer   | users, services    | INSERT из `scripts/seed.sql`. |
-| «Добавить в заявку» (первый раз для пользователя) | requests, request_services | INSERT в обе. |
-| «Добавить в заявку» (черновик уже есть, услуга новая) | request_services | INSERT. |
-| «Добавить в заявку» (та же услуга уже в черновике) | request_services | UPDATE quantity. |
-| «Завершить заявку»         | requests, request_services | UPDATE: status, result_time, result_memory, finished_at; в каждой строке request_services — calculated_time_ms. |
-| «Логически удалить заявку» | requests           | UPDATE status = 'deleted' (один raw SQL). |
+| «Добавить в запрос» (первый раз для пользователя) | requests, request_services | INSERT в обе. |
+| «Добавить в запрос» (черновик уже есть, услуга новая) | request_services | INSERT. |
+| «Добавить в запрос» (та же услуга уже в черновике) | request_services | UPDATE quantity. |
+| «Удалить запрос» | requests | UPDATE status = 'deleted' (один raw SQL). |
 
-При открытии страницы заявки или главной с корзиной данные только **читаются** (SELECT через ORM); при пустом `result_time` время и память считаются в коде и показываются, но в БД не пишутся до нажатия «Завершить заявку».
+При открытии страницы sql_query или главной с корзиной данные только **читаются** (SELECT через ORM); при пустом `result_time` время и память считаются в коде и показываются.
 
 ---
 
@@ -129,28 +129,28 @@
 
 ### 4.2. Полезные SQL-запросы (выполнять в Adminer → SQL command)
 
-- Все заявки и их статусы:
+- Все sql_query и их статусы:
 ```sql
 SELECT id, status, created_at, created_by_id, selectivity, result_time, result_memory, finished_at
 FROM requests
 ORDER BY id;
 ```
 
-- Логически удалённые заявки (для показа на защите):
+- Удалённые sql_query (для показа на защите):
 ```sql
 SELECT id, status, created_at, created_by_id
 FROM requests
 WHERE status = 'deleted';
 ```
 
-- Состав заявки и рассчитанное время по позициям (м-м):
+- Состав sql_query и время по позициям (м-м):
 ```sql
 SELECT rs.request_id, rs.service_id, rs.service_name, rs.quantity, rs.selectivity, rs.calculated_time_ms
 FROM request_services rs
 ORDER BY rs.request_id, rs.position;
 ```
 
-- Одна заявка со всеми услугами:
+- Один sql_query со всеми услугами:
 ```sql
 SELECT r.id, r.status, r.result_time, r.result_memory,
        rs.service_id, rs.service_name, rs.quantity, rs.calculated_time_ms
@@ -169,29 +169,16 @@ ORDER BY rs.position;
 |---------------------------|----------------|------------|
 | GET `/`                   | SELECT из `services` (с фильтром), поиск черновика в `requests` + `request_services` (Preload). Для черновика при пустом result_time — расчёт в памяти (в БД не пишется). | `GetServices` → `GetServices`, `GetCurrentRequest` |
 | GET `/service/:id`        | SELECT из `services` по id. | `GetService` → `GetService` |
-| GET `/request/:id`        | SELECT заявки с Preload `Services.Service`; если удалённая — 404; при наличии услуг и пустом result_time — расчёт в памяти. | `GetRequest` → `GetRequest` |
-| POST `/request/add`       | SELECT услуги и черновика; при отсутствии черновика — INSERT в `requests`, затем INSERT/UPDATE в `request_services`. | `AddToRequest` → `AddServiceToDraft` |
-| POST `/request/:id/delete` | Один raw SQL: `UPDATE requests SET status = 'deleted' WHERE id = ? AND created_by_id = ?`. | `DeleteRequest` → `DeleteRequestLogical` |
-| POST `/request/:id/complete` | SELECT заявки с услугами; расчёт времени/памяти; UPDATE `request_services` (calculated_time_ms); UPDATE `requests` (status, result_time, result_memory, finished_at). | `CompleteRequest` → `CompleteRequest` |
+| GET `/sql_query/:id`     | SELECT sql_query с Preload `Services.Service`; если не найден или удалён — редирект на `/`. При пустом result_time — расчёт в памяти. | `GetSqlQuery` → `GetRequest` |
+| POST `/sql_query/add`    | SELECT услуги и черновика; при отсутствии черновика — INSERT в `requests`, затем INSERT/UPDATE в `request_services`. | `AddToSqlQuery` → `AddServiceToDraft` |
+| POST `/sql_query/:id/delete` | Один raw SQL: `UPDATE requests SET status = 'deleted' WHERE id = ? AND created_by_id = ?`. | `DeleteSqlQuery` → `DeleteRequestLogical` |
 
 Роуты объявлены в `internal/api/server.go`. Обработчики — в `internal/app/handler/handler.go`, работа с БД — в `internal/app/repository/repository.go`.
 
 ---
 
-## 6. Формула расчёта и где она используется
+## 6. Результат в м-м: время и память запроса
 
-- **Время по заявке:**  
-  `Время = Σ (quantity × t_i × (1 + selectivity))`  
-  где `t_i` — число из поля `speed` услуги (например из `"0.3ms"` берётся 0.3). Сумма по всем строкам `request_services` этой заявки.
+Время и память считаются в коде (`calculateResultTimeAndMemory` в `repository.go`) и отображаются на странице sql_query и в корзине. При завершении расчёта результат записывается в `requests.result_time`, `requests.result_memory` и в `request_services.calculated_time_ms`.
 
-- **Память (упрощённо):**  
-  `64 + 16 × количество_позиций` (KB).
-
-В коде:
-
-- `parseSpeedMs(s string)` в `repository.go` — парсит строку вида `"0.3ms"` в число.
-- `calculateResultTimeAndMemory(req *Request)` — считает сумму по заявке и память.
-- При отображении заявки (GET `/request/:id`) и при отображении корзины (GET `/`) для черновика с пустым `result_time` вызывается этот расчёт и результат показывается в интерфейсе (в БД не сохраняется).
-- При нажатии «Завершить заявку» тот же расчёт вызывается в `CompleteRequest`; результат записывается в `requests.result_time` и `requests.result_memory`, а по каждой строке м-м — в `request_services.calculated_time_ms` (вклад позиции: quantity × t_i × (1 + selectivity)).
-
-Итог: **куда записываются записи** — в таблицы `users` (вручную/seed), `services` (seed/Adminer), `requests` и `request_services` (приложение при добавлении в заявку, завершении и логическом удалении). **Где смотреть** — в Adminer в базе `mydb`, таблицы `users`, `services`, `requests`, `request_services`, плюс примеры SQL выше.
+**Где смотреть** — в Adminer в базе `mydb`, таблицы `users`, `services`, `requests`, `request_services`, плюс примеры SQL выше.

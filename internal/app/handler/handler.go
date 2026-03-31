@@ -18,6 +18,11 @@ type Handler struct {
 	Repository *repository.Repository
 }
 
+type sqlQueriesListResponse struct {
+	Total int                       `json:"total"`
+	Items []serializer.SqlQueryJSON `json:"items"`
+}
+
 func NewHandler(r *repository.Repository) *Handler {
 	return &Handler{
 		Repository: r,
@@ -27,14 +32,14 @@ func NewHandler(r *repository.Repository) *Handler {
 func (h *Handler) RegisterAPI(router *gin.Engine) {
 	api := router.Group("/api")
 
-	services := api.Group("/services")
+	indexedTables := api.Group("/indexed-tables")
 	{
-		services.GET("", h.ApiGetServices)
-		services.GET("/:id", h.ApiGetService)
-		services.POST("", h.ApiCreateService)
+		indexedTables.GET("", h.ApiGetServices)
+		indexedTables.GET("/:id", h.ApiGetService)
+		indexedTables.POST("", h.ApiCreateService)
 	}
 
-	sqlQueries := api.Group("/sql_queries")
+	sqlQueries := api.Group("/sql-queries")
 	{
 		sqlQueries.GET("/cart", h.ApiGetCart)
 		sqlQueries.GET("", h.ApiGetSqlQueries)
@@ -43,13 +48,9 @@ func (h *Handler) RegisterAPI(router *gin.Engine) {
 		sqlQueries.PUT("/:id/form", h.ApiFormSqlQuery)
 		sqlQueries.PUT("/:id/finish", h.ApiFinishSqlQuery)
 		sqlQueries.DELETE("/:id", h.ApiDeleteSqlQuery)
-	}
-
-	items := api.Group("/sql_query_items")
-	{
-		items.POST("/add/:service_id", h.ApiAddToDraft)
-		items.PUT("/:service_id/:sql_query_id", h.ApiEditItem)
-		items.DELETE("/:service_id/:sql_query_id", h.ApiDeleteItem)
+		sqlQueries.POST("/draft/indexed-tables/:indexed_table_id", h.ApiAddToDraft)
+		sqlQueries.PUT("/:id/indexed-tables/:indexed_table_id", h.ApiEditItem)
+		sqlQueries.DELETE("/:id/indexed-tables/:indexed_table_id", h.ApiDeleteItem)
 	}
 
 	users := api.Group("/users")
@@ -157,6 +158,12 @@ func (h *Handler) ApiGetSqlQueries(ctx *gin.Context) {
 	status := ctx.Query("status")
 	fromStr := ctx.Query("from-date")
 	toStr := ctx.Query("to-date")
+	if fromStr == "" {
+		fromStr = ctx.Query("formed-from")
+	}
+	if toStr == "" {
+		toStr = ctx.Query("formed-to")
+	}
 	var from, to time.Time
 	var err error
 	if fromStr != "" {
@@ -184,7 +191,10 @@ func (h *Handler) ApiGetSqlQueries(ctx *gin.Context) {
 		completedCount := h.Repository.GetCompletedItemCount(q.ID)
 		resp = append(resp, serializer.SqlQueryToJSON(q, creator, moderator, completedCount))
 	}
-	ctx.JSON(http.StatusOK, resp)
+	ctx.JSON(http.StatusOK, sqlQueriesListResponse{
+		Total: len(resp),
+		Items: resp,
+	})
 }
 
 func (h *Handler) ApiGetSqlQuery(ctx *gin.Context) {
@@ -212,6 +222,8 @@ func (h *Handler) ApiGetSqlQuery(ctx *gin.Context) {
 
 type editSqlQueryBody struct {
 	QueryDescription *string  `json:"query_description"`
+	QueryText        *string  `json:"query_text"`
+	Theme            *string  `json:"theme"`
 	Selectivity      *float64 `json:"selectivity"`
 }
 
@@ -226,7 +238,14 @@ func (h *Handler) ApiEditSqlQuery(ctx *gin.Context) {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	q, err := h.Repository.ApiEditSqlQuery(repository.CreatorUserID(), uint(idUint64), body.QueryDescription, body.Selectivity)
+	queryDescription := body.QueryDescription
+	if queryDescription == nil {
+		queryDescription = body.QueryText
+	}
+	if queryDescription == nil {
+		queryDescription = body.Theme
+	}
+	q, err := h.Repository.ApiEditSqlQuery(repository.CreatorUserID(), uint(idUint64), queryDescription, body.Selectivity)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -293,7 +312,7 @@ func (h *Handler) ApiDeleteSqlQuery(ctx *gin.Context) {
 // ===== API: m-m =====
 
 func (h *Handler) ApiAddToDraft(ctx *gin.Context) {
-	serviceID := ctx.Param("service_id")
+	serviceID := ctx.Param("indexed_table_id")
 	item, err := h.Repository.ApiAddToDraft(repository.CreatorUserID(), serviceID)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
@@ -309,8 +328,8 @@ type editItemBody struct {
 }
 
 func (h *Handler) ApiEditItem(ctx *gin.Context) {
-	serviceID := ctx.Param("service_id")
-	idUint64, err := strconv.ParseUint(ctx.Param("sql_query_id"), 10, 64)
+	serviceID := ctx.Param("indexed_table_id")
+	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -329,8 +348,8 @@ func (h *Handler) ApiEditItem(ctx *gin.Context) {
 }
 
 func (h *Handler) ApiDeleteItem(ctx *gin.Context) {
-	serviceID := ctx.Param("service_id")
-	idUint64, err := strconv.ParseUint(ctx.Param("sql_query_id"), 10, 64)
+	serviceID := ctx.Param("indexed_table_id")
+	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -358,7 +377,7 @@ func (h *Handler) ApiRegisterUser(ctx *gin.Context) {
 	ctx.Header("Location", fmt.Sprintf("/api/users/%d", u.ID))
 	ctx.JSON(http.StatusCreated, serializer.UserToJSON(u))
 }
-func (h *Handler) ApiLoginStub(ctx *gin.Context) { ctx.JSON(http.StatusOK, gin.H{"status": "ok"}) }
+func (h *Handler) ApiLoginStub(ctx *gin.Context)  { ctx.JSON(http.StatusOK, gin.H{"status": "ok"}) }
 func (h *Handler) ApiLogoutStub(ctx *gin.Context) { ctx.JSON(http.StatusOK, gin.H{"status": "ok"}) }
 
 // GetServices обрабатывает главную страницу "/" и реализует фильтрацию по параметру filter.
@@ -470,7 +489,6 @@ func (h *Handler) DeleteSqlQuery(ctx *gin.Context) {
 
 	ctx.Redirect(http.StatusSeeOther, "/")
 }
-
 
 func (h *Handler) errorHandler(ctx *gin.Context, errorStatusCode int, err error) {
 	logrus.Error(err.Error())

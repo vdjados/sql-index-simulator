@@ -84,9 +84,9 @@ type RequestService struct {
 	Selectivity float64 `gorm:"not null"`
 	ImageKey    string  `gorm:"size:255"`
 
-	Quantity int   `gorm:"not null;default:1"`
-	Position int   `gorm:"not null;default:1"`
-	IsMain   bool  `gorm:"not null;default:false"`
+	Quantity         int     `gorm:"not null;default:1"`
+	Position         int     `gorm:"not null;default:1"`
+	IsMain           bool    `gorm:"not null;default:false"`
 	CalculatedTimeMs float64 `gorm:"type:numeric(10,2)"` // считается при завершении заявки
 
 	Service *Service `gorm:"foreignKey:ServiceID"` // для расчёта по формуле (скорость индекса)
@@ -124,10 +124,10 @@ func ModeratorUserID() uint {
 }
 
 var (
-	ErrNotFound    = errors.New("not found")
-	ErrNotAllowed  = errors.New("not allowed")
-	ErrNoDraft     = errors.New("no draft")
-	ErrValidation  = errors.New("validation")
+	ErrNotFound   = errors.New("not found")
+	ErrNotAllowed = errors.New("not allowed")
+	ErrNoDraft    = errors.New("no draft")
+	ErrValidation = errors.New("validation")
 )
 
 func (r *Repository) CreateUser(u User) (User, error) {
@@ -154,12 +154,12 @@ func (r *Repository) getDraftOrCreate(userID uint) (*Request, error) {
 		return nil, err
 	}
 	req = Request{
-		Status:          StatusDraft,
-		CreatedAt:       time.Now(),
-		CreatedByID:     userID,
-		Selectivity:     0.05,
-		ResultTime:      "",
-		ResultMemory:    "",
+		Status:           StatusDraft,
+		CreatedAt:        time.Now(),
+		CreatedByID:      userID,
+		Selectivity:      0.05,
+		ResultTime:       "",
+		ResultMemory:     "",
 		QueryDescription: "",
 	}
 	if err := r.db.Create(&req).Error; err != nil {
@@ -178,6 +178,17 @@ func (r *Repository) ApiGetSqlQuery(id uint) (Request, error) {
 	}
 	if req.Status == StatusDeleted {
 		return Request{}, ErrNotFound
+	}
+	if len(req.Services) > 0 && req.ResultTime == "" {
+		timeMs, memKB := r.calculateResultTimeAndMemory(&req)
+		req.ResultTime = fmt.Sprintf("%.2fms", timeMs)
+		req.ResultMemory = fmt.Sprintf("%.0fKB", memKB)
+	}
+	if req.ResultTime == "" {
+		req.ResultTime = "—"
+	}
+	if req.ResultMemory == "" {
+		req.ResultMemory = "—"
 	}
 	return req, nil
 }

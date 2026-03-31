@@ -2,26 +2,26 @@
   "info": {
     "_postman_id": "9b3a6e3e-7a5f-4c3e-8a0e-0d8a7b7f9c11",
     "name": "LAB3 — SQL Index Simulator (REST API)",
-    "description": "Коллекция под Лабораторную 3. Переменные: baseUrl, service1, service2, cart_id.\n\nbaseUrl по умолчанию: http://localhost:8082\nservice1/service2 — id услуг (индексов) из таблицы services.\ncart_id автоматически подхватывается из GET /api/sql_queries/cart.\n\nПримечание: запрос \"Создать услугу (multipart)\" содержит поля image/video типа file — нужно вручную выбрать файлы в Postman.",
+    "description": "Коллекция под Лабораторную 3. Переменные: baseUrl, indexed_table1, indexed_table2, cart_id.\n\nbaseUrl по умолчанию: http://localhost:8082\nindexed_table1/indexed_table2 — id индексов из таблицы services.\ncart_id автоматически подхватывается из GET /api/sql-queries/cart.\n\nПримечание: запрос \"Создать индекс (multipart)\" содержит поля image/video типа file — нужно вручную выбрать файлы в Postman.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "01) GET sql_queries list (filter by formed_at; status optional)",
+      "name": "01) GET sql-queries list (filter by formed_at; status optional)",
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries?from-date=2026-01-01&to-date=2026-12-31",
+          "raw": "{{baseUrl}}/api/sql-queries?formed-from=2026-01-01&formed-to=2026-12-31",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries"
+            "sql-queries"
           ],
           "query": [
-            { "key": "from-date", "value": "2026-01-01" },
-            { "key": "to-date", "value": "2026-12-31" }
+            { "key": "formed-from", "value": "2026-01-01" },
+            { "key": "formed-to", "value": "2026-12-31" }
           ]
         }
       }
@@ -50,20 +50,20 @@
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/cart",
+          "raw": "{{baseUrl}}/api/sql-queries/cart",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "cart"
           ]
         }
       }
     },
     {
-      "name": "03) DELETE draft sql_query (if exists)",
+      "name": "03) DELETE draft sql-query (if exists)",
       "event": [
         {
           "listen": "test",
@@ -83,30 +83,30 @@
       "request": {
         "method": "DELETE",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}",
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "{{cart_id}}"
           ]
         }
       }
     },
     {
-      "name": "04) GET services list (with filter)",
+      "name": "04) GET indexed-tables list (with filter)",
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/api/services?filter=btree",
+          "raw": "{{baseUrl}}/api/indexed-tables?filter=btree",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "services"
+            "indexed-tables"
           ],
           "query": [
             { "key": "filter", "value": "btree" }
@@ -115,7 +115,7 @@
       }
     },
     {
-      "name": "05) POST create service (multipart: image + video)",
+      "name": "05) POST create indexed-table (multipart: image + video)",
       "request": {
         "method": "POST",
         "header": [
@@ -134,49 +134,51 @@
           ]
         },
         "url": {
-          "raw": "{{baseUrl}}/api/services",
+          "raw": "{{baseUrl}}/api/indexed-tables",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "services"
+            "indexed-tables"
           ]
         }
       }
     },
     {
-      "name": "06) POST add service1 to draft (creates draft if needed)",
+      "name": "06) POST add indexed_table1 to draft (creates draft if needed)",
       "request": {
         "method": "POST",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_query_items/add/{{service1}}",
+          "raw": "{{baseUrl}}/api/sql-queries/draft/indexed-tables/{{indexed_table1}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_query_items",
-            "add",
-            "{{service1}}"
+            "sql-queries",
+            "draft",
+            "indexed-tables",
+            "{{indexed_table1}}"
           ]
         }
       }
     },
     {
-      "name": "07) POST add service2 to draft",
+      "name": "07) POST add indexed_table2 to draft",
       "request": {
         "method": "POST",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_query_items/add/{{service2}}",
+          "raw": "{{baseUrl}}/api/sql-queries/draft/indexed-tables/{{indexed_table2}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_query_items",
-            "add",
-            "{{service2}}"
+            "sql-queries",
+            "draft",
+            "indexed-tables",
+            "{{indexed_table2}}"
           ]
         }
       }
@@ -201,30 +203,30 @@
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/cart",
+          "raw": "{{baseUrl}}/api/sql-queries/cart",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "cart"
           ]
         }
       }
     },
     {
-      "name": "09) GET sql_query by id (draft with 2 services)",
+      "name": "09) GET sql-query by id (draft with 2 indexed tables)",
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}",
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "{{cart_id}}"
           ]
         }
@@ -242,21 +244,22 @@
           "raw": "{\n  \"quantity\": 2,\n  \"position\": 1,\n  \"selectivity\": 0.10\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/api/sql_query_items/{{service1}}/{{cart_id}}",
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}/indexed-tables/{{indexed_table1}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_query_items",
-            "{{service1}}",
-            "{{cart_id}}"
+            "sql-queries",
+            "{{cart_id}}",
+            "indexed-tables",
+            "{{indexed_table1}}"
           ]
         }
       }
     },
     {
-      "name": "11) PUT edit sql_query (query_description/selectivity)",
+      "name": "11) PUT edit sql-query (theme/query_text/selectivity)",
       "request": {
         "method": "PUT",
         "header": [
@@ -264,16 +267,16 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"query_description\": \"SELECT * FROM table WHERE indexed_col = 42\",\n  \"selectivity\": 0.10\n}"
+          "raw": "{\n  \"theme\": \"Оптимизация выборки по indexed_col\",\n  \"query_text\": \"SELECT * FROM table WHERE indexed_col = 42\",\n  \"selectivity\": 0.10\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}",
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "{{cart_id}}"
           ]
         }
@@ -291,13 +294,13 @@
           "raw": "{\n  \"status\": \"completed\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}/finish",
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}/finish",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "{{cart_id}}",
             "finish"
           ]
@@ -305,17 +308,17 @@
       }
     },
     {
-      "name": "13) PUT form sql_query (draft -> formed, computes results)",
+      "name": "13) PUT form sql-query (draft -> formed, computes results)",
       "request": {
         "method": "PUT",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}/form",
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}/form",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "{{cart_id}}",
             "form"
           ]
@@ -323,7 +326,7 @@
       }
     },
     {
-      "name": "14) PUT finish formed sql_query (moderator completes)",
+      "name": "14) PUT finish formed sql-query (moderator completes)",
       "request": {
         "method": "PUT",
         "header": [
@@ -334,13 +337,13 @@
           "raw": "{\n  \"status\": \"completed\"\n}"
         },
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries/{{cart_id}}/finish",
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}/finish",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries",
+            "sql-queries",
             "{{cart_id}}",
             "finish"
           ]
@@ -348,21 +351,21 @@
       }
     },
     {
-      "name": "15) GET sql_queries list (check it appears, not draft/deleted)",
+      "name": "15) GET sql-queries list (check it appears, not draft/deleted)",
       "request": {
         "method": "GET",
         "url": {
-          "raw": "{{baseUrl}}/api/sql_queries?from-date=2026-01-01&to-date=2026-12-31&status=completed",
+          "raw": "{{baseUrl}}/api/sql-queries?formed-from=2026-01-01&formed-to=2026-12-31&status=completed",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
-            "sql_queries"
+            "sql-queries"
           ],
           "query": [
-            { "key": "from-date", "value": "2026-01-01" },
-            { "key": "to-date", "value": "2026-12-31" },
+            { "key": "formed-from", "value": "2026-01-01" },
+            { "key": "formed-to", "value": "2026-12-31" },
             { "key": "status", "value": "completed" }
           ]
         }
@@ -395,8 +398,8 @@
   ],
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8082" },
-    { "key": "service1", "value": "btree-10k" },
-    { "key": "service2", "value": "gin-500k" },
+    { "key": "indexed_table1", "value": "btree-10k" },
+    { "key": "indexed_table2", "value": "gin-500k" },
     { "key": "cart_id", "value": "" }
   ]
 }

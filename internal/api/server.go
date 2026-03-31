@@ -1,10 +1,7 @@
 package api
 
 import (
-	"fmt"
-	"html/template"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -15,29 +12,12 @@ import (
 	"web_backend/internal/app/repository"
 )
 
-// seq возвращает срез [0, 1, ..., n-1] для итерации в шаблоне (например, дублирование строк по количеству).
-func seq(n int) []int {
-	if n <= 0 {
-		return nil
-	}
-	s := make([]int, n)
-	for i := range s {
-		s[i] = i
-	}
-	return s
-}
-
 func StartServer() {
 	log.Println("Starting server")
 
 	_ = godotenv.Load() // загружает .env (DB_PASS, DB_HOST и т.д.)
 
 	router := gin.Default()
-
-	router.SetFuncMap(template.FuncMap{
-		"printf": fmt.Sprintf,
-		"seq":    seq,
-	})
 
 	postgresString := dsn.FromEnv()
 	logrus.Info("DSN: ", postgresString)
@@ -50,21 +30,7 @@ func StartServer() {
 
 	handler := handler.NewHandler(repo)
 
-	router.LoadHTMLGlob("templates/*")
-	router.Static("/static", "./resources")
-
 	handler.RegisterAPI(router)
-
-	router.GET("/", handler.GetServices)
-	router.GET("/service/:id", handler.GetService)
-	router.GET("/sql_query/:id", handler.GetSqlQuery)
-	router.POST("/sql_query/add", handler.AddToSqlQuery)
-	router.POST("/sql_query/:id/delete", handler.DeleteSqlQuery)
-
-	// Любой неизвестный путь — редирект на главную (без страницы "not found")
-	router.NoRoute(func(c *gin.Context) {
-		c.Redirect(http.StatusSeeOther, "/")
-	})
 
 	port := os.Getenv("PORT")
 	if port == "" {

@@ -5,13 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"mime/multipart"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/minio/minio-go/v7"
+	"github.com/redis/go-redis/v9"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	minioClient "web_backend/internal/app/minioClient"
 )
@@ -28,15 +34,20 @@ const (
 type Repository struct {
 	db *gorm.DB
 	mc *minio.Client
+	rc *redis.Client
+
+	blacklistMu sync.RWMutex
+	blacklist   map[string]time.Time
 }
 
 // Модели БД
 
 type User struct {
-	ID    uint   `gorm:"primaryKey"`
-	Name  string `gorm:"size:255;not null"`
-	Email string `gorm:"size:255;uniqueIndex"`
-	Role  string `gorm:"size:32;not null;default:'user'"`
+	ID           uint   `gorm:"primaryKey"`
+	Name         string `gorm:"size:255;not null"`
+	Email        string `gorm:"size:255;uniqueIndex"`
+	PasswordHash string `gorm:"size:255"`
+	Role         string `gorm:"size:32;not null;default:'user'"`
 }
 
 // Service описывает тип индекса в симуляторе и хранится в таблице services.
@@ -108,7 +119,29 @@ func NewRepository(dsn string) (*Repository, error) {
 		return nil, err
 	}
 
-	return &Repository{db: db, mc: mc}, nil
+	redisHost := strings.TrimSpace(os.Getenv("REDIS_HOST"))
+	if redisHost == "" {
+		redisHost = "127.0.0.1"
+	}
+	redisPort := strings.TrimSpace(os.Getenv("REDIS_PORT"))
+	if redisPort == "" {
+		redisPort = "6379"
+	}
+	redisPass := os.Getenv("REDIS_PASS")
+	rc := redis.NewClient(&redis.Options{
+		Addr:     redisHost + ":" + redisPort,
+		Password: redisPass,
+		DB:       0,
+	})
+	if err := rc.Ping(context.Background()).Err(); err != nil {
+		rc = nil
+	}
+
+	repo := &Repository{db: db, mc: mc, rc: rc, blacklist: make(map[string]time.Time)}
+	if err := repo.bootstrapAuthUsers(); err != nil {
+		return nil, err
+	}
+	return repo, nil
 }
 
 const creatorUserID uint = 1
@@ -142,6 +175,155 @@ func (r *Repository) CreateUser(u User) (User, error) {
 		return User{}, err
 	}
 	return u, nil
+}
+
+func (r *Repository) CreateUserWithPassword(name, email, password string) (User, error) {
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(strings.ToLower(email))
+	if name == "" || email == "" || strings.TrimSpace(password) == "" {
+		return User{}, ErrValidation
+	}
+	var existing User
+	if err := r.db.First(&existing, "email = ?", email).Error; err == nil {
+		return User{}, ErrValidation
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return User{}, err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, err
+	}
+	u := User{
+		Name:         name,
+		Email:        email,
+		PasswordHash: string(hash),
+		Role:         "user",
+	}
+	if err := r.db.Create(&u).Error; err != nil {
+		return User{}, err
+	}
+	return u, nil
+}
+
+func (r *Repository) SignIn(email, password string) (User, string, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" || strings.TrimSpace(password) == "" {
+		return User{}, "", ErrValidation
+	}
+	var u User
+	if err := r.db.First(&u, "email = ?", email).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return User{}, "", ErrNotFound
+		}
+		return User{}, "", err
+	}
+	if strings.TrimSpace(u.PasswordHash) == "" {
+		return User{}, "", ErrNotAllowed
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
+		return User{}, "", ErrNotAllowed
+	}
+	token, err := generateJWT(u)
+	if err != nil {
+		return User{}, "", err
+	}
+	return u, token, nil
+}
+
+func (r *Repository) IsTokenBlacklisted(ctx context.Context, token string) (bool, error) {
+	if strings.TrimSpace(token) == "" {
+		return false, nil
+	}
+	if r.rc == nil {
+		r.blacklistMu.RLock()
+		exp, ok := r.blacklist[token]
+		r.blacklistMu.RUnlock()
+		if !ok {
+			return false, nil
+		}
+		if time.Now().After(exp) {
+			r.blacklistMu.Lock()
+			delete(r.blacklist, token)
+			r.blacklistMu.Unlock()
+			return false, nil
+		}
+		return true, nil
+	}
+	key := "jwt:blacklist:" + token
+	exists, err := r.rc.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}
+
+func (r *Repository) AddTokenToBlacklist(ctx context.Context, token string, ttl time.Duration, userID uint) error {
+	if ttl <= 0 {
+		return nil
+	}
+	if strings.TrimSpace(token) == "" {
+		return nil
+	}
+	if r.rc == nil {
+		r.blacklistMu.Lock()
+		r.blacklist[token] = time.Now().Add(ttl)
+		r.blacklistMu.Unlock()
+		return nil
+	}
+	key := "jwt:blacklist:" + token
+	return r.rc.Set(ctx, key, strconv.FormatUint(uint64(userID), 10), ttl).Err()
+}
+
+func generateJWT(u User) (string, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if strings.TrimSpace(secret) == "" {
+		secret = "dev-secret-change-me"
+	}
+	ttlMinutes := 60
+	if ttlStr := strings.TrimSpace(os.Getenv("JWT_TTL_MINUTES")); ttlStr != "" {
+		if parsed, err := strconv.Atoi(ttlStr); err == nil && parsed > 0 {
+			ttlMinutes = parsed
+		}
+	}
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"sub":  strconv.FormatUint(uint64(u.ID), 10),
+		"uid":  u.ID,
+		"role": u.Role,
+		"iat":  now.Unix(),
+		"exp":  now.Add(time.Duration(ttlMinutes) * time.Minute).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+func (r *Repository) bootstrapAuthUsers() error {
+	defaultPassword := strings.TrimSpace(os.Getenv("DEFAULT_USER_PASSWORD"))
+	if defaultPassword == "" {
+		defaultPassword = "password"
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(defaultPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	users := []User{
+		{Name: "Creator", Email: "user@test.local", Role: "user", PasswordHash: string(hash)},
+		{Name: "Moderator", Email: "moderator@test.local", Role: "moderator", PasswordHash: string(hash)},
+	}
+	for _, u := range users {
+		if err := r.db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "email"}},
+			DoUpdates: clause.Assignments(map[string]interface{}{"name": u.Name, "role": u.Role}),
+		}).Create(&u).Error; err != nil {
+			return err
+		}
+		if err := r.db.Model(&User{}).
+			Where("email = ? AND (password_hash IS NULL OR password_hash = '')", u.Email).
+			Update("password_hash", u.PasswordHash).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Repository) getDraftOrCreate(userID uint) (*Request, error) {
@@ -189,6 +371,17 @@ func (r *Repository) ApiGetSqlQuery(id uint) (Request, error) {
 	}
 	if req.ResultMemory == "" {
 		req.ResultMemory = "—"
+	}
+	return req, nil
+}
+
+func (r *Repository) ApiGetSqlQueryForUser(id, userID uint, isModerator bool) (Request, error) {
+	req, err := r.ApiGetSqlQuery(id)
+	if err != nil {
+		return Request{}, err
+	}
+	if !isModerator && req.CreatedByID != userID {
+		return Request{}, ErrNotAllowed
 	}
 	return req, nil
 }
@@ -396,7 +589,7 @@ func (r *Repository) ApiFormSqlQuery(userID uint, id uint) (Request, error) {
 	return req, nil
 }
 
-func (r *Repository) ApiFinishSqlQuery(id uint, status string) (Request, error) {
+func (r *Repository) ApiFinishSqlQuery(id uint, status string, moderatorID uint) (Request, error) {
 	req, err := r.ApiGetSqlQuery(id)
 	if err != nil {
 		return Request{}, err
@@ -408,8 +601,7 @@ func (r *Repository) ApiFinishSqlQuery(id uint, status string) (Request, error) 
 		return Request{}, ErrValidation
 	}
 	now := time.Now()
-	mid := ModeratorUserID()
-	req.ModeratorID = &mid
+	req.ModeratorID = &moderatorID
 	req.FinishedAt = &now
 	req.Status = status
 	if err := r.db.Save(&req).Error; err != nil {
@@ -518,9 +710,12 @@ func (r *Repository) CreateService(s Service) error {
 
 // ApiListSqlQueries возвращает список sql_query для API: исключаем draft и deleted.
 // Фильтруем по статусу и диапазону даты формирования.
-func (r *Repository) ApiListSqlQueries(from, to time.Time, status string) ([]Request, error) {
+func (r *Repository) ApiListSqlQueriesForUser(userID uint, isModerator bool, from, to time.Time, status string) ([]Request, error) {
 	var qs []Request
 	q := r.db.Model(&Request{}).Where("status <> ? AND status <> ?", StatusDraft, StatusDeleted)
+	if !isModerator {
+		q = q.Where("created_by_id = ?", userID)
+	}
 	if status != "" {
 		q = q.Where("status = ?", status)
 	}

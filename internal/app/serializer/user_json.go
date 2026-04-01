@@ -10,8 +10,19 @@ type UserJSON struct {
 }
 
 type RegisterUserJSON struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginJSON struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponseJSON struct {
+	Token string `json:"token"`
+	Role  string `json:"role"`
 }
 
 func UserToJSON(u repository.User) UserJSON {
@@ -22,4 +33,3 @@ func UserToJSON(u repository.User) UserJSON {
 		Role:  u.Role,
 	}
 }
-

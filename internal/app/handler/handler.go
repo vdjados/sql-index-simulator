@@ -18,46 +18,61 @@ type Handler struct {
 	Repository *repository.Repository
 }
 
-type sqlQueriesListResponse struct {
-	Total int                       `json:"total"`
-	Items []serializer.SqlQueryJSON `json:"items"`
-}
-
 func NewHandler(r *repository.Repository) *Handler {
 	return &Handler{
 		Repository: r,
 	}
 }
 
+// RegisterAPI godoc
+// @title SQL Index Simulator API
+// @version 1.0
+// @description API для лабораторной 4: JWT авторизация, роли, Redis blacklist, заявки и индексы
+// @host localhost:8082
+// @BasePath /api
+// @schemes http
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
 func (h *Handler) RegisterAPI(router *gin.Engine) {
 	api := router.Group("/api")
 
-	indexedTables := api.Group("/indexed-tables")
+	publicIndexedTables := api.Group("/indexed-tables")
 	{
-		indexedTables.GET("", h.ApiGetServices)
-		indexedTables.GET("/:id", h.ApiGetService)
-		indexedTables.POST("", h.ApiCreateService)
+		publicIndexedTables.GET("", h.ApiGetServices)
+		publicIndexedTables.GET("/:id", h.ApiGetService)
 	}
 
-	sqlQueries := api.Group("/sql-queries")
+	publicUsers := api.Group("/users")
 	{
-		sqlQueries.GET("/cart", h.ApiGetCart)
-		sqlQueries.GET("", h.ApiGetSqlQueries)
-		sqlQueries.GET("/:id", h.ApiGetSqlQuery)
-		sqlQueries.PUT("/:id", h.ApiEditSqlQuery)
-		sqlQueries.PUT("/:id/form", h.ApiFormSqlQuery)
-		sqlQueries.PUT("/:id/finish", h.ApiFinishSqlQuery)
-		sqlQueries.DELETE("/:id", h.ApiDeleteSqlQuery)
-		sqlQueries.POST("/draft/indexed-tables/:indexed_table_id", h.ApiAddToDraft)
-		sqlQueries.PUT("/:id/indexed-tables/:indexed_table_id", h.ApiEditItem)
-		sqlQueries.DELETE("/:id/indexed-tables/:indexed_table_id", h.ApiDeleteItem)
+		publicUsers.POST("/register", h.ApiRegisterUser)
+		publicUsers.POST("/login", h.ApiLogin)
 	}
 
-	users := api.Group("/users")
+	authenticated := api.Group("/")
+	authenticated.Use(h.AuthRequired())
 	{
-		users.POST("/register", h.ApiRegisterUser)
-		users.POST("/login", h.ApiLoginStub)
-		users.POST("/logout", h.ApiLogoutStub)
+		authenticated.POST("/users/logout", h.ApiLogout)
+
+		sqlQueries := authenticated.Group("/sql-queries")
+		{
+			sqlQueries.GET("/cart", h.ApiGetCart)
+			sqlQueries.GET("", h.ApiGetSqlQueries)
+			sqlQueries.GET("/:id", h.ApiGetSqlQuery)
+			sqlQueries.PUT("/:id", h.ApiEditSqlQuery)
+			sqlQueries.PUT("/:id/form", h.ApiFormSqlQuery)
+			sqlQueries.DELETE("/:id", h.ApiDeleteSqlQuery)
+			sqlQueries.POST("/draft/indexed-tables/:indexed_table_id", h.ApiAddToDraft)
+			sqlQueries.PUT("/:id/indexed-tables/:indexed_table_id", h.ApiEditItem)
+			sqlQueries.DELETE("/:id/indexed-tables/:indexed_table_id", h.ApiDeleteItem)
+		}
+	}
+
+	moderator := api.Group("/")
+	moderator.Use(h.AuthRequired(), h.ModeratorOnly())
+	{
+		moderator.POST("/indexed-tables", h.ApiCreateService)
+		moderator.PUT("/sql-queries/:id/finish", h.ApiFinishSqlQuery)
 	}
 }
 
@@ -79,6 +94,15 @@ func (h *Handler) apiError(ctx *gin.Context, code int, err error) {
 
 // ===== API: Services =====
 
+// ApiGetServices godoc
+// @Summary Получить список индексов
+// @Description Публичный список indexed tables с фильтрацией по строке
+// @Tags indexed-tables
+// @Produce json
+// @Param filter query string false "Фильтр по name/table_size"
+// @Success 200 {array} serializer.ServiceJSON
+// @Failure 500 {object} serializer.ErrorResponse
+// @Router /indexed-tables [get]
 func (h *Handler) ApiGetServices(ctx *gin.Context) {
 	filter := ctx.Query("filter")
 	services, err := h.Repository.GetServices(filter)
@@ -93,6 +117,14 @@ func (h *Handler) ApiGetServices(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, resp)
 }
 
+// ApiGetService godoc
+// @Summary Получить индекс по ID
+// @Tags indexed-tables
+// @Produce json
+// @Param id path string true "ID индекса"
+// @Success 200 {object} serializer.ServiceJSON
+// @Failure 404 {object} serializer.ErrorResponse
+// @Router /indexed-tables/{id} [get]
 func (h *Handler) ApiGetService(ctx *gin.Context) {
 	id := ctx.Param("id")
 	s, err := h.Repository.GetService(id)
@@ -103,6 +135,24 @@ func (h *Handler) ApiGetService(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.ServiceToJSON(s))
 }
 
+// ApiCreateService godoc
+// @Summary Создать индекс (moderator)
+// @Tags indexed-tables
+// @Accept mpfd
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id formData string true "ID индекса"
+// @Param name formData string true "Название"
+// @Param table_size formData string true "Размер таблицы"
+// @Param speed formData string false "Скорость"
+// @Param description formData string false "Описание"
+// @Param image formData file false "Картинка"
+// @Param video formData file false "Видео/GIF"
+// @Success 201 {object} serializer.ServiceJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 403 {object} serializer.ErrorResponse
+// @Router /indexed-tables [post]
 func (h *Handler) ApiCreateService(ctx *gin.Context) {
 	contentType := ctx.GetHeader("Content-Type")
 	var s repository.Service
@@ -137,15 +187,27 @@ func (h *Handler) ApiCreateService(ctx *gin.Context) {
 		}
 		s = updated
 	}
-	ctx.Header("Location", fmt.Sprintf("/api/services/%s", s.ID))
+	ctx.Header("Location", fmt.Sprintf("/api/indexed-tables/%s", s.ID))
 	ctx.JSON(http.StatusCreated, serializer.ServiceToJSON(s))
 }
 
 // ===== API: Cart & SqlQueries (scaffold) =====
 
+// ApiGetCart godoc
+// @Summary Иконка корзины текущего пользователя
+// @Tags sql-queries
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} serializer.CartJSON
+// @Failure 401 {object} serializer.ErrorResponse
+// @Router /sql-queries/cart [get]
 func (h *Handler) ApiGetCart(ctx *gin.Context) {
-	userID := repository.CreatorUserID()
-	req, _ := h.Repository.GetCurrentRequest(userID)
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	req, _ := h.Repository.GetCurrentRequest(user.ID)
 	if req == nil {
 		ctx.JSON(http.StatusOK, serializer.CartJSON{ID: nil, Count: 0})
 		return
@@ -153,6 +215,21 @@ func (h *Handler) ApiGetCart(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.CartJSON{ID: &req.ID, Count: len(req.Services)})
 }
 
+// ApiGetSqlQueries godoc
+// @Summary Список заявок
+// @Description Creator видит только свои заявки, moderator видит все
+// @Tags sql-queries
+// @Produce json
+// @Security ApiKeyAuth
+// @Param status query string false "Статус"
+// @Param formed-from query string false "Дата от YYYY-MM-DD"
+// @Param formed-to query string false "Дата до YYYY-MM-DD"
+// @Param from-date query string false "Старый алиас formed-from"
+// @Param to-date query string false "Старый алиас formed-to"
+// @Success 200 {object} serializer.SqlQueriesListResponse
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Router /sql-queries [get]
 func (h *Handler) ApiGetSqlQueries(ctx *gin.Context) {
 	// фильтрация: status, from-date, to-date (как в примере)
 	status := ctx.Query("status")
@@ -180,7 +257,12 @@ func (h *Handler) ApiGetSqlQueries(ctx *gin.Context) {
 			return
 		}
 	}
-	list, err := h.Repository.ApiListSqlQueries(from, to, status)
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	list, err := h.Repository.ApiListSqlQueriesForUser(user.ID, user.IsModerator(), from, to, status)
 	if err != nil {
 		h.apiError(ctx, http.StatusInternalServerError, err)
 		return
@@ -191,19 +273,35 @@ func (h *Handler) ApiGetSqlQueries(ctx *gin.Context) {
 		completedCount := h.Repository.GetCompletedItemCount(q.ID)
 		resp = append(resp, serializer.SqlQueryToJSON(q, creator, moderator, completedCount))
 	}
-	ctx.JSON(http.StatusOK, sqlQueriesListResponse{
+	ctx.JSON(http.StatusOK, serializer.SqlQueriesListResponse{
 		Total: len(resp),
 		Items: resp,
 	})
 }
 
+// ApiGetSqlQuery godoc
+// @Summary Получить одну заявку
+// @Tags sql-queries
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path int true "ID заявки"
+// @Success 200 {object} serializer.SqlQueryDetailsResponse
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 404 {object} serializer.ErrorResponse
+// @Router /sql-queries/{id} [get]
 func (h *Handler) ApiGetSqlQuery(ctx *gin.Context) {
 	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	q, err := h.Repository.ApiGetSqlQuery(uint(idUint64))
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	q, err := h.Repository.ApiGetSqlQueryForUser(uint(idUint64), user.ID, user.IsModerator())
 	if err != nil {
 		h.apiError(ctx, http.StatusNotFound, err)
 		return
@@ -214,26 +312,32 @@ func (h *Handler) ApiGetSqlQuery(ctx *gin.Context) {
 	for _, it := range q.Services {
 		items = append(items, serializer.SqlQueryItemToJSON(it))
 	}
-	ctx.JSON(http.StatusOK, gin.H{
-		"sql_query": serializer.SqlQueryToJSON(q, creator, moderator, completedCount),
-		"items":     items,
+	ctx.JSON(http.StatusOK, serializer.SqlQueryDetailsResponse{
+		SqlQuery: serializer.SqlQueryToJSON(q, creator, moderator, completedCount),
+		Items:    items,
 	})
 }
 
-type editSqlQueryBody struct {
-	QueryDescription *string  `json:"query_description"`
-	QueryText        *string  `json:"query_text"`
-	Theme            *string  `json:"theme"`
-	Selectivity      *float64 `json:"selectivity"`
-}
-
+// ApiEditSqlQuery godoc
+// @Summary Обновить поля заявки
+// @Tags sql-queries
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path int true "ID заявки"
+// @Param body body serializer.EditSqlQueryJSON true "Поля заявки"
+// @Success 200 {object} serializer.SqlQueryJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 403 {object} serializer.ErrorResponse
+// @Router /sql-queries/{id} [put]
 func (h *Handler) ApiEditSqlQuery(ctx *gin.Context) {
 	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	var body editSqlQueryBody
+	var body serializer.EditSqlQueryJSON
 	if err := ctx.BindJSON(&body); err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -245,7 +349,12 @@ func (h *Handler) ApiEditSqlQuery(ctx *gin.Context) {
 	if queryDescription == nil {
 		queryDescription = body.Theme
 	}
-	q, err := h.Repository.ApiEditSqlQuery(repository.CreatorUserID(), uint(idUint64), queryDescription, body.Selectivity)
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	q, err := h.Repository.ApiEditSqlQuery(user.ID, uint(idUint64), queryDescription, body.Selectivity)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -255,13 +364,29 @@ func (h *Handler) ApiEditSqlQuery(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.SqlQueryToJSON(q, creator, moderator, completedCount))
 }
 
+// ApiFormSqlQuery godoc
+// @Summary Сформировать заявку
+// @Tags sql-queries
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path int true "ID заявки"
+// @Success 200 {object} serializer.SqlQueryJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 403 {object} serializer.ErrorResponse
+// @Router /sql-queries/{id}/form [put]
 func (h *Handler) ApiFormSqlQuery(ctx *gin.Context) {
 	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	q, err := h.Repository.ApiFormSqlQuery(repository.CreatorUserID(), uint(idUint64))
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	q, err := h.Repository.ApiFormSqlQuery(user.ID, uint(idUint64))
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -271,22 +396,36 @@ func (h *Handler) ApiFormSqlQuery(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.SqlQueryToJSON(q, creator, moderator, completedCount))
 }
 
-type statusBody struct {
-	Status string `json:"status"`
-}
-
+// ApiFinishSqlQuery godoc
+// @Summary Завершить/отклонить заявку (только moderator)
+// @Tags sql-queries
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path int true "ID заявки"
+// @Param body body serializer.StatusJSON true "Новый статус: completed/rejected"
+// @Success 200 {object} serializer.SqlQueryJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 403 {object} serializer.ErrorResponse
+// @Router /sql-queries/{id}/finish [put]
 func (h *Handler) ApiFinishSqlQuery(ctx *gin.Context) {
 	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	var body statusBody
+	var body serializer.StatusJSON
 	if err := ctx.BindJSON(&body); err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	q, err := h.Repository.ApiFinishSqlQuery(uint(idUint64), body.Status)
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	q, err := h.Repository.ApiFinishSqlQuery(uint(idUint64), body.Status, user.ID)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -296,13 +435,29 @@ func (h *Handler) ApiFinishSqlQuery(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.SqlQueryToJSON(q, creator, moderator, completedCount))
 }
 
+// ApiDeleteSqlQuery godoc
+// @Summary Удалить черновик заявки
+// @Tags sql-queries
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path int true "ID заявки"
+// @Success 200 {object} serializer.MessageResponse
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 403 {object} serializer.ErrorResponse
+// @Router /sql-queries/{id} [delete]
 func (h *Handler) ApiDeleteSqlQuery(ctx *gin.Context) {
 	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	if err := h.Repository.ApiDeleteSqlQuery(repository.CreatorUserID(), uint(idUint64)); err != nil {
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	if err := h.Repository.ApiDeleteSqlQuery(user.ID, uint(idUint64)); err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
@@ -311,9 +466,24 @@ func (h *Handler) ApiDeleteSqlQuery(ctx *gin.Context) {
 
 // ===== API: m-m =====
 
+// ApiAddToDraft godoc
+// @Summary Добавить индекс в черновик
+// @Tags sql-query-items
+// @Produce json
+// @Security ApiKeyAuth
+// @Param indexed_table_id path string true "ID индекса"
+// @Success 201 {object} serializer.SqlQueryItemJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Router /sql-queries/draft/indexed-tables/{indexed_table_id} [post]
 func (h *Handler) ApiAddToDraft(ctx *gin.Context) {
 	serviceID := ctx.Param("indexed_table_id")
-	item, err := h.Repository.ApiAddToDraft(repository.CreatorUserID(), serviceID)
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	item, err := h.Repository.ApiAddToDraft(user.ID, serviceID)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -321,12 +491,20 @@ func (h *Handler) ApiAddToDraft(ctx *gin.Context) {
 	ctx.JSON(http.StatusCreated, serializer.SqlQueryItemToJSON(item))
 }
 
-type editItemBody struct {
-	Quantity    *int     `json:"quantity"`
-	Position    *int     `json:"position"`
-	Selectivity *float64 `json:"selectivity"`
-}
-
+// ApiEditItem godoc
+// @Summary Изменить позицию в заявке
+// @Tags sql-query-items
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path int true "ID заявки"
+// @Param indexed_table_id path string true "ID индекса"
+// @Param body body serializer.EditSqlQueryItemJSON true "Поля позиции"
+// @Success 200 {object} serializer.SqlQueryItemJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 403 {object} serializer.ErrorResponse
+// @Router /sql-queries/{id}/indexed-tables/{indexed_table_id} [put]
 func (h *Handler) ApiEditItem(ctx *gin.Context) {
 	serviceID := ctx.Param("indexed_table_id")
 	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
@@ -334,12 +512,17 @@ func (h *Handler) ApiEditItem(ctx *gin.Context) {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	var body editItemBody
+	var body serializer.EditSqlQueryItemJSON
 	if err := ctx.BindJSON(&body); err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	item, err := h.Repository.ApiEditItem(repository.CreatorUserID(), uint(idUint64), serviceID, body.Quantity, body.Position, body.Selectivity)
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	item, err := h.Repository.ApiEditItem(user.ID, uint(idUint64), serviceID, body.Quantity, body.Position, body.Selectivity)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -347,6 +530,18 @@ func (h *Handler) ApiEditItem(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serializer.SqlQueryItemToJSON(item))
 }
 
+// ApiDeleteItem godoc
+// @Summary Удалить позицию из заявки
+// @Tags sql-query-items
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path int true "ID заявки"
+// @Param indexed_table_id path string true "ID индекса"
+// @Success 200 {object} serializer.MessageResponse
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Failure 403 {object} serializer.ErrorResponse
+// @Router /sql-queries/{id}/indexed-tables/{indexed_table_id} [delete]
 func (h *Handler) ApiDeleteItem(ctx *gin.Context) {
 	serviceID := ctx.Param("indexed_table_id")
 	idUint64, err := strconv.ParseUint(ctx.Param("id"), 10, 64)
@@ -354,7 +549,12 @@ func (h *Handler) ApiDeleteItem(ctx *gin.Context) {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	if err := h.Repository.ApiDeleteItem(repository.CreatorUserID(), uint(idUint64), serviceID); err != nil {
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	if err := h.Repository.ApiDeleteItem(user.ID, uint(idUint64), serviceID); err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
@@ -363,13 +563,22 @@ func (h *Handler) ApiDeleteItem(ctx *gin.Context) {
 
 // ===== API: users =====
 
+// ApiRegisterUser godoc
+// @Summary Регистрация
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param body body serializer.RegisterUserJSON true "Пользователь"
+// @Success 201 {object} serializer.UserJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Router /users/register [post]
 func (h *Handler) ApiRegisterUser(ctx *gin.Context) {
 	var body serializer.RegisterUserJSON
 	if err := ctx.BindJSON(&body); err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
 	}
-	u, err := h.Repository.CreateUser(repository.User{Name: strings.TrimSpace(body.Name), Email: strings.TrimSpace(body.Email), Role: "user"})
+	u, err := h.Repository.CreateUserWithPassword(strings.TrimSpace(body.Name), strings.TrimSpace(body.Email), body.Password)
 	if err != nil {
 		h.apiError(ctx, http.StatusBadRequest, err)
 		return
@@ -377,8 +586,62 @@ func (h *Handler) ApiRegisterUser(ctx *gin.Context) {
 	ctx.Header("Location", fmt.Sprintf("/api/users/%d", u.ID))
 	ctx.JSON(http.StatusCreated, serializer.UserToJSON(u))
 }
-func (h *Handler) ApiLoginStub(ctx *gin.Context)  { ctx.JSON(http.StatusOK, gin.H{"status": "ok"}) }
-func (h *Handler) ApiLogoutStub(ctx *gin.Context) { ctx.JSON(http.StatusOK, gin.H{"status": "ok"}) }
+
+// ApiLogin godoc
+// @Summary Логин (JWT)
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param body body serializer.LoginJSON true "Учетные данные"
+// @Success 200 {object} serializer.LoginResponseJSON
+// @Failure 400 {object} serializer.ErrorResponse
+// @Failure 401 {object} serializer.ErrorResponse
+// @Router /users/login [post]
+func (h *Handler) ApiLogin(ctx *gin.Context) {
+	var body serializer.LoginJSON
+	if err := ctx.BindJSON(&body); err != nil {
+		h.apiError(ctx, http.StatusBadRequest, err)
+		return
+	}
+	user, token, err := h.Repository.SignIn(body.Email, body.Password)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) || errors.Is(err, repository.ErrNotAllowed) {
+			h.apiError(ctx, http.StatusUnauthorized, err)
+			return
+		}
+		h.apiError(ctx, http.StatusBadRequest, err)
+		return
+	}
+	ctx.SetCookie("access_token", token, 3600, "/", "", false, true)
+	ctx.JSON(http.StatusOK, serializer.LoginResponseJSON{Token: token, Role: user.Role})
+}
+
+// ApiLogout godoc
+// @Summary Logout (blacklist token)
+// @Tags users
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} map[string]string
+// @Failure 401 {object} serializer.ErrorResponse
+// @Router /users/logout [post]
+func (h *Handler) ApiLogout(ctx *gin.Context) {
+	user, ok := currentUser(ctx)
+	if !ok {
+		h.apiError(ctx, http.StatusUnauthorized, repository.ErrNotAllowed)
+		return
+	}
+	tokenString := extractToken(ctx)
+	if tokenString != "" {
+		ttlVal, _ := ctx.Get("auth_token_ttl")
+		ttl, _ := ttlVal.(time.Duration)
+		if err := h.Repository.AddTokenToBlacklist(ctx.Request.Context(), tokenString, ttl, user.ID); err != nil {
+			h.apiError(ctx, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	ctx.SetCookie("access_token", "", -1, "/", "", false, true)
+	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
 
 // GetServices обрабатывает главную страницу "/" и реализует фильтрацию по параметру filter.
 // Фильтрация выполняется по полям Name и TableSize модели Service.

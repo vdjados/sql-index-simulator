@@ -1,0 +1,518 @@
+{
+  "info": {
+    "_postman_id": "b9f556ec-9d47-4d9d-9f68-278beefe6f1a",
+    "name": "LAB4 — SQL Index Simulator (Auth + Swagger)",
+    "description": "Коллекция под Лабораторную 4. Сценарий: гость -> creator -> moderator -> logout/blacklist.\n\nПеременные: baseUrl, indexed_table_id, cart_id, creator_token, moderator_token.\n\nВажно: для токенов всегда используется заголовок Authorization: Bearer <token>.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01) Guest: GET /sql-queries -> 401",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Guest gets 401', function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries"
+          ]
+        }
+      }
+    },
+    {
+      "name": "02) Guest: GET /indexed-tables -> 200",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/indexed-tables?filter=btree",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "indexed-tables"
+          ],
+          "query": [
+            {
+              "key": "filter",
+              "value": "btree"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "03) Creator login (save creator_token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "const j = pm.response.json();",
+              "pm.collectionVariables.set('creator_token', j.token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@test.local\",\n  \"password\": \"password\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/users/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "users",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "04) Creator: GET /sql-queries -> 200 (only own)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries"
+          ]
+        }
+      }
+    },
+    {
+      "name": "05) Creator: GET cart (save cart_id if exists)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "const j = pm.response.json();",
+              "if (j && j.id) { pm.collectionVariables.set('cart_id', String(j.id)); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/cart",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "cart"
+          ]
+        }
+      }
+    },
+    {
+      "name": "06) Creator: add indexed table to draft",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/draft/indexed-tables/{{indexed_table_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "draft",
+            "indexed-tables",
+            "{{indexed_table_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "07) Creator: GET cart (refresh cart_id)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "const j = pm.response.json();",
+              "if (j && j.id) { pm.collectionVariables.set('cart_id', String(j.id)); }",
+              "pm.test('cart_id exists', function () { pm.expect(pm.collectionVariables.get('cart_id')).to.not.eql(''); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/cart",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "cart"
+          ]
+        }
+      }
+    },
+    {
+      "name": "08) Creator: GET one sql-query",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "{{cart_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "09) Creator: edit sql-query (theme/query_text/selectivity)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"theme\": \"Lab4 demo theme\",\n  \"query_text\": \"SELECT * FROM table WHERE indexed_col = 42\",\n  \"selectivity\": 0.1\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "{{cart_id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "10) Creator: form sql-query",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}/form",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "{{cart_id}}",
+            "form"
+          ]
+        }
+      }
+    },
+    {
+      "name": "11) Creator: finish attempt -> 403",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Creator gets 403 on finish', function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{creator_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"completed\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}/finish",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "{{cart_id}}",
+            "finish"
+          ]
+        }
+      }
+    },
+    {
+      "name": "12) Moderator login (save moderator_token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+              "const j = pm.response.json();",
+              "pm.collectionVariables.set('moderator_token', j.token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"moderator@test.local\",\n  \"password\": \"password\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/users/login",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "users",
+            "login"
+          ]
+        }
+      }
+    },
+    {
+      "name": "13) Moderator: finish sql-query -> 200",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{moderator_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"completed\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries/{{cart_id}}/finish",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries",
+            "{{cart_id}}",
+            "finish"
+          ]
+        }
+      }
+    },
+    {
+      "name": "14) Moderator: GET /sql-queries (all)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{moderator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries?status=completed",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries"
+          ],
+          "query": [
+            {
+              "key": "status",
+              "value": "completed"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "15) Moderator: logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{moderator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/users/logout",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "users",
+            "logout"
+          ]
+        }
+      }
+    },
+    {
+      "name": "16) Blacklisted token check: GET /sql-queries -> 401",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Blacklisted token gets 401', function () { pm.response.to.have.status(401); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{moderator_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sql-queries",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sql-queries"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "indexed_table_id",
+      "value": "btree-10k"
+    },
+    {
+      "key": "cart_id",
+      "value": ""
+    },
+    {
+      "key": "creator_token",
+      "value": ""
+    },
+    {
+      "key": "moderator_token",
+      "value": ""
+    }
+  ]
+}

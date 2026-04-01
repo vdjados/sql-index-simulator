@@ -1,0 +1,712 @@
+basePath: /api
+definitions:
+  serializer.CartJSON:
+    properties:
+      count:
+        type: integer
+      id:
+        type: integer
+    type: object
+  serializer.EditSqlQueryItemJSON:
+    properties:
+      position:
+        type: integer
+      quantity:
+        type: integer
+      selectivity:
+        type: number
+    type: object
+  serializer.EditSqlQueryJSON:
+    properties:
+      query_description:
+        type: string
+      query_text:
+        type: string
+      selectivity:
+        type: number
+      theme:
+        type: string
+    type: object
+  serializer.ErrorResponse:
+    properties:
+      description:
+        type: string
+      status:
+        type: string
+    type: object
+  serializer.LoginJSON:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  serializer.LoginResponseJSON:
+    properties:
+      role:
+        type: string
+      token:
+        type: string
+    type: object
+  serializer.MessageResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  serializer.RegisterUserJSON:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  serializer.ServiceJSON:
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      image_key:
+        type: string
+      image_url:
+        type: string
+      name:
+        type: string
+      speed:
+        type: string
+      table_size:
+        type: string
+      video_key:
+        type: string
+      video_url:
+        type: string
+    type: object
+  serializer.SqlQueriesListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/serializer.SqlQueryJSON'
+        type: array
+      total:
+        type: integer
+    type: object
+  serializer.SqlQueryDetailsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/serializer.SqlQueryItemJSON'
+        type: array
+      sql_query:
+        $ref: '#/definitions/serializer.SqlQueryJSON'
+    type: object
+  serializer.SqlQueryItemJSON:
+    properties:
+      calculated_time_ms:
+        type: number
+      image_url:
+        type: string
+      indexed_table_id:
+        type: string
+      name:
+        type: string
+      position:
+        type: integer
+      quantity:
+        type: integer
+      selectivity:
+        type: number
+      table_size:
+        type: string
+      video_url:
+        type: string
+    type: object
+  serializer.SqlQueryJSON:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      created_by_id:
+        type: integer
+      creator_login:
+        type: string
+      formed_at:
+        type: string
+      id:
+        type: integer
+      moderator_id:
+        type: integer
+      moderator_login:
+        type: string
+      query_text:
+        type: string
+      result_memory:
+        type: string
+      result_time:
+        type: string
+      results_count:
+        type: integer
+      selectivity:
+        type: number
+      status:
+        type: string
+      theme:
+        type: string
+    type: object
+  serializer.StatusJSON:
+    properties:
+      status:
+        type: string
+    type: object
+  serializer.UserJSON:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      role:
+        type: string
+    type: object
+host: localhost:8082
+info:
+  contact: {}
+  description: 'API для лабораторной 4: JWT авторизация, роли, Redis blacklist'
+  title: SQL Index Simulator API
+  version: "1.0"
+paths:
+  /indexed-tables:
+    get:
+      description: Публичный список indexed tables с фильтрацией по строке
+      parameters:
+      - description: Фильтр по name/table_size
+        in: query
+        name: filter
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/serializer.ServiceJSON'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      summary: Получить список индексов
+      tags:
+      - indexed-tables
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: ID индекса
+        in: formData
+        name: id
+        required: true
+        type: string
+      - description: Название
+        in: formData
+        name: name
+        required: true
+        type: string
+      - description: Размер таблицы
+        in: formData
+        name: table_size
+        required: true
+        type: string
+      - description: Скорость
+        in: formData
+        name: speed
+        type: string
+      - description: Описание
+        in: formData
+        name: description
+        type: string
+      - description: Картинка
+        in: formData
+        name: image
+        type: file
+      - description: Видео/GIF
+        in: formData
+        name: video
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/serializer.ServiceJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Создать индекс (moderator)
+      tags:
+      - indexed-tables
+  /indexed-tables/{id}:
+    get:
+      parameters:
+      - description: ID индекса
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.ServiceJSON'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      summary: Получить индекс по ID
+      tags:
+      - indexed-tables
+  /sql-queries:
+    get:
+      description: Creator видит только свои заявки, moderator видит все
+      parameters:
+      - description: Статус
+        in: query
+        name: status
+        type: string
+      - description: Дата от YYYY-MM-DD
+        in: query
+        name: formed-from
+        type: string
+      - description: Дата до YYYY-MM-DD
+        in: query
+        name: formed-to
+        type: string
+      - description: Старый алиас formed-from
+        in: query
+        name: from-date
+        type: string
+      - description: Старый алиас formed-to
+        in: query
+        name: to-date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.SqlQueriesListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Список заявок
+      tags:
+      - sql-queries
+  /sql-queries/{id}:
+    delete:
+      parameters:
+      - description: ID заявки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить черновик заявки
+      tags:
+      - sql-queries
+    get:
+      parameters:
+      - description: ID заявки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.SqlQueryDetailsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Получить одну заявку
+      tags:
+      - sql-queries
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID заявки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Поля заявки
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.EditSqlQueryJSON'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.SqlQueryJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Обновить поля заявки
+      tags:
+      - sql-queries
+  /sql-queries/{id}/finish:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID заявки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 'Новый статус: completed/rejected'
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.StatusJSON'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.SqlQueryJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Завершить/отклонить заявку (только moderator)
+      tags:
+      - sql-queries
+  /sql-queries/{id}/form:
+    put:
+      parameters:
+      - description: ID заявки
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.SqlQueryJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Сформировать заявку
+      tags:
+      - sql-queries
+  /sql-queries/{id}/indexed-tables/{indexed_table_id}:
+    delete:
+      parameters:
+      - description: ID заявки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID индекса
+        in: path
+        name: indexed_table_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Удалить позицию из заявки
+      tags:
+      - sql-query-items
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID заявки
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID индекса
+        in: path
+        name: indexed_table_id
+        required: true
+        type: string
+      - description: Поля позиции
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.EditSqlQueryItemJSON'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.SqlQueryItemJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Изменить позицию в заявке
+      tags:
+      - sql-query-items
+  /sql-queries/cart:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.CartJSON'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Иконка корзины текущего пользователя
+      tags:
+      - sql-queries
+  /sql-queries/draft/indexed-tables/{indexed_table_id}:
+    post:
+      parameters:
+      - description: ID индекса
+        in: path
+        name: indexed_table_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/serializer.SqlQueryItemJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Добавить индекс в черновик
+      tags:
+      - sql-query-items
+  /users/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Учетные данные
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.LoginJSON'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.LoginResponseJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      summary: Логин (JWT)
+      tags:
+      - users
+  /users/logout:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Logout (blacklist token)
+      tags:
+      - users
+  /users/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Пользователь
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/serializer.RegisterUserJSON'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/serializer.UserJSON'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/serializer.ErrorResponse'
+      summary: Регистрация
+      tags:
+      - users
+schemes:
+- http
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

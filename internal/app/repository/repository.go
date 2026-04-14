@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"mime/multipart"
@@ -249,7 +251,7 @@ func (r *Repository) IsTokenBlacklisted(ctx context.Context, token string) (bool
 		}
 		return true, nil
 	}
-	key := "jwt:blacklist:" + token
+	key := blacklistKey(token)
 	exists, err := r.rc.Exists(ctx, key).Result()
 	if err != nil {
 		return false, err
@@ -270,8 +272,15 @@ func (r *Repository) AddTokenToBlacklist(ctx context.Context, token string, ttl 
 		r.blacklistMu.Unlock()
 		return nil
 	}
-	key := "jwt:blacklist:" + token
-	return r.rc.Set(ctx, key, strconv.FormatUint(uint64(userID), 10), ttl).Err()
+	key := blacklistKey(token)
+	value := fmt.Sprintf("user_id:%d", userID)
+	return r.rc.Set(ctx, key, value, ttl).Err()
+}
+
+func blacklistKey(token string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(token)))
+	// Keep keys short and readable in redis-cli while preserving uniqueness.
+	return "blacklist:" + hex.EncodeToString(sum[:20])
 }
 
 func generateJWT(u User) (string, error) {

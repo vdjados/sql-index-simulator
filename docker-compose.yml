@@ -31,6 +31,7 @@ services:
   redis:
     image: redis:latest
     container_name: rip-redis
+    command: ["redis-server", "--save", "20", "1", "--loglevel", "warning", "--requirepass", "${REDIS_PASS:-password}"]
     ports:
       - "6379:6379"
     volumes:

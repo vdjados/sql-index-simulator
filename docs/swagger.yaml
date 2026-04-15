@@ -83,15 +83,6 @@ definitions:
       video_url:
         type: string
     type: object
-  serializer.SqlQueriesListResponse:
-    properties:
-      items:
-        items:
-          $ref: '#/definitions/serializer.SqlQueryJSON'
-        type: array
-      total:
-        type: integer
-    type: object
   serializer.SqlQueryDetailsResponse:
     properties:
       items:
@@ -313,7 +304,9 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/serializer.SqlQueriesListResponse'
+            items:
+              $ref: '#/definitions/serializer.SqlQueryJSON'
+            type: array
         "400":
           description: Bad Request
           schema:

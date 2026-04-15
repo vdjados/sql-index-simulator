@@ -226,7 +226,7 @@ func (h *Handler) ApiGetCart(ctx *gin.Context) {
 // @Param formed-to query string false "Дата до YYYY-MM-DD"
 // @Param from-date query string false "Старый алиас formed-from"
 // @Param to-date query string false "Старый алиас formed-to"
-// @Success 200 {object} serializer.SqlQueriesListResponse
+// @Success 200 {array} serializer.SqlQueryJSON
 // @Failure 400 {object} serializer.ErrorResponse
 // @Failure 401 {object} serializer.ErrorResponse
 // @Router /sql-queries [get]
@@ -273,10 +273,7 @@ func (h *Handler) ApiGetSqlQueries(ctx *gin.Context) {
 		completedCount := h.Repository.GetCompletedItemCount(q.ID)
 		resp = append(resp, serializer.SqlQueryToJSON(q, creator, moderator, completedCount))
 	}
-	ctx.JSON(http.StatusOK, serializer.SqlQueriesListResponse{
-		Total: len(resp),
-		Items: resp,
-	})
+	ctx.JSON(http.StatusOK, resp)
 }
 
 // ApiGetSqlQuery godoc

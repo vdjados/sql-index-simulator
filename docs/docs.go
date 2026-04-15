@@ -227,7 +227,10 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/serializer.SqlQueriesListResponse"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/serializer.SqlQueryJSON"
+                            }
                         }
                     },
                     "400": {
@@ -966,20 +969,6 @@ const docTemplate = `{
                 },
                 "video_url": {
                     "type": "string"
-                }
-            }
-        },
-        "serializer.SqlQueriesListResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/serializer.SqlQueryJSON"
-                    }
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },

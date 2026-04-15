@@ -9,11 +9,6 @@ type MessageResponse struct {
 	Message string `json:"message"`
 }
 
-type SqlQueriesListResponse struct {
-	Total int            `json:"total"`
-	Items []SqlQueryJSON `json:"items"`
-}
-
 type SqlQueryDetailsResponse struct {
 	SqlQuery SqlQueryJSON       `json:"sql_query"`
 	Items    []SqlQueryItemJSON `json:"items"`

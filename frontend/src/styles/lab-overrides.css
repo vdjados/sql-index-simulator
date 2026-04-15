@@ -1,0 +1,84 @@
+/* Дополнения к index_style.css из старых лаб: breadcrumbs и блок фильтров лаб.5 */
+
+.header-actions .header-nav-link {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.header-actions .header-nav-link:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+
+.app-breadcrumbs {
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.app-breadcrumbs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  gap: 0.35rem;
+}
+
+.app-breadcrumbs__link {
+  color: #3498db;
+  font-weight: 500;
+}
+
+.app-breadcrumbs__link:hover {
+  color: #2ecc71;
+}
+
+.app-breadcrumbs__current {
+  color: #526170;
+}
+
+.app-breadcrumbs__sep {
+  color: #7f8c8d;
+  margin-left: 0.35rem;
+  user-select: none;
+}
+
+.catalog-filters-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e4e8;
+}
+
+.catalog-filters-extra__field label {
+  display: block;
+  font-size: 12px;
+  color: #526170;
+  margin-bottom: 4px;
+}
+
+.catalog-filters-extra__field input {
+  height: 40px;
+}
+
+.lead-text-home {
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: #526170;
+  margin-bottom: 1rem;
+}
+
+/* Подсказка под заголовком каталога */
+.catalog-hint {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  margin-bottom: 1rem;
+}

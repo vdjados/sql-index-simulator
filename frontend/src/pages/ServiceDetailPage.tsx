@@ -1,24 +1,50 @@
-import { useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppBreadcrumbs } from '../components/AppBreadcrumbs'
-import { getMockById } from '../mock/indexedTables'
+import { fetchServiceById, type ApiService } from '../api/client'
+import { fallbackServiceById } from '../api/fallback'
 
 const DETAIL_GIF_FALLBACK = '/placeholder-index.gif'
 const IMAGE_FALLBACK = '/placeholder-index.png'
 
-interface ServiceDetailPageProps {
-  cartCount: number
-  onCartAdd: (id: string) => void
-}
-
 /** Как `service.html`: `.detail-wrapper`, `.detail-card`, бейджи таблица/скорость, кнопка `.search-btn`. */
-export function ServiceDetailPage(props: ServiceDetailPageProps) {
+export function ServiceDetailPage() {
   const { id: rawId } = useParams()
   const navigate = useNavigate()
   const id = rawId ? decodeURIComponent(rawId) : ''
 
-  const item = useMemo(() => (id ? getMockById(id) : undefined), [id])
-  const { cartCount, onCartAdd } = props
+  const [item, setItem] = useState<ApiService | undefined>(undefined)
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'fallback' | 'not_found'>('idle')
+
+  useEffect(() => {
+    let cancelled = false
+    if (!id) {
+      setStatus('not_found')
+      setItem(undefined)
+      return
+    }
+    setStatus('loading')
+    fetchServiceById(id)
+      .then((svc) => {
+        if (cancelled) return
+        setItem(svc)
+        setStatus('ok')
+      })
+      .catch(() => {
+        if (cancelled) return
+        const fb = fallbackServiceById(id)
+        if (!fb) {
+          setStatus('not_found')
+          setItem(undefined)
+        } else {
+          setItem(fb)
+          setStatus('fallback')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
 
   if (!item) {
     return (
@@ -29,7 +55,7 @@ export function ServiceDetailPage(props: ServiceDetailPageProps) {
             { label: 'Не найдено' },
           ]}
         />
-        <p>Услуга не найдена в mock-данных.</p>
+        <p>{status === 'loading' ? 'Загрузка…' : 'Услуга не найдена.'}</p>
         <button type="button" className="search-btn" onClick={() => navigate('/')}>
           В каталог
         </button>
@@ -37,7 +63,7 @@ export function ServiceDetailPage(props: ServiceDetailPageProps) {
     )
   }
 
-  const src = item.gifUrl.trim() ? item.gifUrl : DETAIL_GIF_FALLBACK
+  const src = item.video_url?.trim() ? item.video_url : DETAIL_GIF_FALLBACK
 
   return (
     <>
@@ -47,6 +73,11 @@ export function ServiceDetailPage(props: ServiceDetailPageProps) {
           { label: item.name },
         ]}
       />
+      {status === 'fallback' && (
+        <p style={{ color: '#7f8c8d', marginTop: 8 }}>
+          Бэкенд недоступен — показаны mock-данные (fallback внутри fetch).
+        </p>
+      )}
       <div className="detail-wrapper">
         <div className="detail-card">
           <div className="detail-card__gif-wrap">
@@ -64,18 +95,13 @@ export function ServiceDetailPage(props: ServiceDetailPageProps) {
           <div className="detail-card__body">
             <h1 className="detail-card__title">{item.name}</h1>
             <div className="detail-card__badges">
-              <span className="detail-card__badge detail-card__badge--table">Таблица: {item.tableSize}</span>
+              <span className="detail-card__badge detail-card__badge--table">Таблица: {item.table_size}</span>
               <span className="detail-card__badge detail-card__badge--speed">Скорость: {item.speed}</span>
             </div>
             <p className="detail-card__description">{item.description}</p>
             <p style={{ fontSize: '0.85rem', color: '#7f8c8d' }}>
-              Селективность: {item.selectivity.toFixed(2)} · в корзине: {cartCount}
+              MinIO: <code>image_key</code>={item.image_key || '—'} <code>image_url</code>={item.image_url || '—'}
             </p>
-            <div className="detail-card__form">
-              <button type="button" className="search-btn" onClick={() => onCartAdd(item.id)}>
-                Добавить в запрос
-              </button>
-            </div>
           </div>
         </div>
       </div>

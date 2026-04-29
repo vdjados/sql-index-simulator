@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"os"
 	"strconv"
@@ -59,6 +60,8 @@ type Service struct {
 	TableSize   string `gorm:"size:64;not null"`
 	Speed       string `gorm:"size:64;not null"`
 	Description string `gorm:"type:text;not null"`
+	// ShortDescriptionEN is used for CLIP/SigLIP embeddings (50–100 chars, English).
+	ShortDescriptionEN string `gorm:"type:text;not null;default:''"`
 	ImageKey    string `gorm:"size:255"`
 	GifKey      string `gorm:"size:255"`
 	Status      string `gorm:"size:32;not null;default:'active'"` // active / deleted
@@ -141,6 +144,9 @@ func NewRepository(dsn string) (*Repository, error) {
 
 	repo := &Repository{db: db, mc: mc, rc: rc, blacklist: make(map[string]time.Time)}
 	if err := repo.bootstrapAuthUsers(); err != nil {
+		return nil, err
+	}
+	if err := repo.bootstrapServices(); err != nil {
 		return nil, err
 	}
 	return repo, nil
@@ -333,6 +339,156 @@ func (r *Repository) bootstrapAuthUsers() error {
 		}
 	}
 	return nil
+}
+
+func (r *Repository) bootstrapServices() error {
+	// If services already exist, do nothing.
+	var count int64
+	if err := r.db.Model(&Service{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	// Seed a few services with STRICT English descriptions (50–100 chars).
+	seed := []Service{
+		{
+			ID:          "btree-512mb",
+			Name:        "B-Tree (средняя таблица)",
+			TableSize:   "512 MB",
+			Speed:       "0.60ms",
+			Description: "Compact B-Tree index for fast point lookups and ordered scans.",
+			ShortDescriptionEN: "Compact B-Tree index for fast point lookups and ordered scans.",
+			Status:      "active",
+		},
+		{
+			ID:          "hash-2gb",
+			Name:        "Hash (большая таблица)",
+			TableSize:   "2 GB",
+			Speed:       "0.35ms",
+			Description: "Hash index optimized for equality predicates on a single key.",
+			ShortDescriptionEN: "Hash index optimized for equality predicates on a single key.",
+			Status:      "active",
+		},
+		{
+			ID:          "gist-128mb",
+			Name:        "GiST (компактная)",
+			TableSize:   "128 MB",
+			Speed:       "1.20ms",
+			Description: "GiST index for range queries and geometric data with good recall.",
+			ShortDescriptionEN: "GiST index for range queries and geometric data with good recall.",
+			Status:      "active",
+		},
+		{
+			ID:          "gin-1gb",
+			Name:        "GIN (полнотекст)",
+			TableSize:   "1 GB",
+			Speed:       "0.90ms",
+			Description: "GIN index for full-text search and arrays, trading speed for space.",
+			ShortDescriptionEN: "GIN index for full-text search and arrays, trading speed for space.",
+			Status:      "active",
+		},
+	}
+
+	if err := r.db.Create(&seed).Error; err != nil {
+		return err
+	}
+
+	// Seed MinIO media (simple SVGs) and attach them to services so the API returns
+	// both `image_key` and a full `image_url` (MINIO_PUBLIC_ENDPOINT or host/port).
+	if r.mc == nil {
+		return nil
+	}
+	bucket := minioClient.Bucket()
+	ctx := context.Background()
+	if err := ensureBucket(ctx, r.mc, bucket); err != nil {
+		return err
+	}
+
+	// Upload once with deterministic object names.
+	type mediaSeed struct {
+		serviceID string
+		key       string
+		svg       string
+	}
+	seeds := []mediaSeed{
+		{
+			serviceID: "btree-512mb",
+			key:       "seed/btree.svg",
+			svg:       svgCard("B-Tree", "#1abc9c"),
+		},
+		{
+			serviceID: "hash-2gb",
+			key:       "seed/hash.svg",
+			svg:       svgCard("Hash", "#3498db"),
+		},
+	}
+
+	for _, s := range seeds {
+		if err := ensureObject(ctx, r.mc, bucket, s.key, strings.NewReader(s.svg), int64(len(s.svg)), "image/svg+xml"); err != nil {
+			return err
+		}
+		if err := r.db.Model(&Service{}).Where("id = ?", s.serviceID).Update("image_key", s.key).Error; err != nil {
+			return err
+		}
+	}
+
+	// Seed SPA logo for the header.
+	logoKey := "logo.svg"
+	logoSvg := svgCard("SQL", "#00ed64")
+	_ = ensureObject(ctx, r.mc, bucket, logoKey, strings.NewReader(logoSvg), int64(len(logoSvg)), "image/svg+xml")
+
+	return nil
+}
+
+func ensureBucket(ctx context.Context, client *minio.Client, bucket string) error {
+	exists, err := client.BucketExists(ctx, bucket)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	return client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+}
+
+func ensureObject(ctx context.Context, client *minio.Client, bucket, objectName string, r io.Reader, size int64, contentType string) error {
+	_, err := client.StatObject(ctx, bucket, objectName, minio.StatObjectOptions{})
+	if err == nil {
+		return nil
+	}
+	// If object doesn't exist, upload it.
+	_, putErr := minioClient.UploadFromReader(ctx, client, bucket, objectName, r, size, contentType)
+	return putErr
+}
+
+func svgCard(label, color string) string {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		label = "Index"
+	}
+	if strings.TrimSpace(color) == "" {
+		color = "#2c3e50"
+	}
+	// Keep it tiny and deterministic.
+	return fmt.Sprintf(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="%s" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#111827" stop-opacity="0.95"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="24" fill="url(#g)"/>
+  <text x="40" y="120" font-family="system-ui,Segoe UI,Arial" font-size="56" fill="#ffffff" font-weight="700">%s</text>
+  <text x="40" y="180" font-family="system-ui,Segoe UI,Arial" font-size="24" fill="#e5e7eb">seeded from backend</text>
+  <text x="40" y="250" font-family="system-ui,Segoe UI,Arial" font-size="18" fill="#cbd5e1">MinIO object: %s</text>
+</svg>`,
+		color,
+		label,
+		label,
+	)
 }
 
 func (r *Repository) getDraftOrCreate(userID uint) (*Request, error) {

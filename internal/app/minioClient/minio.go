@@ -32,11 +32,12 @@ func InitMinio() (*minio.Client, error) {
 	}
 	user := os.Getenv("MINIO_USER")
 	if user == "" {
-		user = "minio"
+		// Default credentials match docker-compose.yml (MINIO_ROOT_USER/PASSWORD).
+		user = "rootminio"
 	}
 	pass := os.Getenv("MINIO_PASS")
 	if pass == "" {
-		pass = "minio124"
+		pass = "rootminio"
 	}
 	return NewMinioClient(host+":"+port, user, pass, false)
 }
@@ -44,7 +45,7 @@ func InitMinio() (*minio.Client, error) {
 func Bucket() string {
 	b := os.Getenv("MINIO_BUCKET")
 	if b == "" {
-		return "test"
+		return "sql-index"
 	}
 	return b
 }

@@ -43,6 +43,10 @@ func (h *Handler) RegisterAPI(router *gin.Engine) {
 		publicIndexedTables.GET("/:id", h.ApiGetService)
 	}
 
+	// Public cart endpoint for lab 6 (no auth, always 200).
+	// This allows the SPA to call a dedicated GET for the cart icon without CORS issues.
+	api.GET("/cart", h.ApiGetPublicCart)
+
 	publicUsers := api.Group("/users")
 	{
 		publicUsers.POST("/register", h.ApiRegisterUser)
@@ -100,11 +104,16 @@ func (h *Handler) apiError(ctx *gin.Context, code int, err error) {
 // @Tags indexed-tables
 // @Produce json
 // @Param filter query string false "Фильтр по name/table_size"
+// @Param Title query string false "Алиас filter (как в образце): фильтр по name/table_size"
 // @Success 200 {array} serializer.ServiceJSON
 // @Failure 500 {object} serializer.ErrorResponse
 // @Router /indexed-tables [get]
 func (h *Handler) ApiGetServices(ctx *gin.Context) {
 	filter := ctx.Query("filter")
+	if strings.TrimSpace(filter) == "" {
+		// Compatibility with the reference project query param naming.
+		filter = ctx.Query("Title")
+	}
 	services, err := h.Repository.GetServices(filter)
 	if err != nil {
 		h.apiError(ctx, http.StatusInternalServerError, err)
@@ -213,6 +222,17 @@ func (h *Handler) ApiGetCart(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, serializer.CartJSON{ID: &req.ID, Count: len(req.Services)})
+}
+
+// ApiGetPublicCart godoc
+// @Summary Иконка корзины (публично, без авторизации)
+// @Description Возвращает 200 всегда. Для лабораторной 6 — отдельный GET для иконки корзины без JWT.
+// @Tags cart
+// @Produce json
+// @Success 200 {object} serializer.CartJSON
+// @Router /cart [get]
+func (h *Handler) ApiGetPublicCart(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, serializer.CartJSON{ID: nil, Count: 0})
 }
 
 // ApiGetSqlQueries godoc

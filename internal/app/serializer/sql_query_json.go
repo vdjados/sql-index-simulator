@@ -109,7 +109,7 @@ func mediaURL(key string) string {
 	host = strings.TrimRight(host, "/")
 	bucket := os.Getenv("MINIO_BUCKET")
 	if strings.TrimSpace(bucket) == "" {
-		bucket = "test"
+		bucket = "sql-index"
 	}
 	return fmt.Sprintf("%s/%s/%s", host, bucket, key)
 }

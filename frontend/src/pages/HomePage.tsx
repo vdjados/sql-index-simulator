@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Spinner } from 'react-bootstrap'
 import { Link } from 'react-router-dom'
 import { AppBreadcrumbs } from '../components/AppBreadcrumbs'
-import { fetchIndexedTablesFromApi } from '../api/client'
+import { fetchServices } from '../api/client'
 
 /** Главная: проверка API в блоке в стиле карточек из старых лаб. */
 export function HomePage() {
@@ -12,7 +12,7 @@ export function HomePage() {
   useEffect(() => {
     let cancelled = false
     setApiStatus('loading')
-    fetchIndexedTablesFromApi()
+    fetchServices({ filter: '' })
       .then((data) => {
         if (cancelled) return
         const n = Array.isArray(data) ? data.length : 0

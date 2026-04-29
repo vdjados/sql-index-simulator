@@ -1,42 +1,85 @@
-import { useCallback, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CartIcon } from '../components/CartIcon'
 import { CatalogFilters } from '../components/CatalogFilters'
 import { IndexedTableCard } from '../components/IndexedTableCard'
 import {
   defaultFilters,
-  useFilteredIndexedTables,
   type CatalogFiltersState,
 } from '../hooks/useFilteredIndexedTables'
-import { MOCK_INDEXED_TABLES } from '../mock/indexedTables'
-
-interface CatalogPageProps {
-  cartCount: number
-  onCartAdd: (id: string) => void
-}
+import { fetchPublicCart, fetchServices, type ApiService } from '../api/client'
+import { fallbackServices } from '../api/fallback'
+import { useServiceImageSearch } from '../hooks/useServiceImageSearch'
 
 /** Список как `services.html`: секция поиска + корзина, сетка `.cards-grid`, карточки из mock. */
-export function CatalogPage(props: CatalogPageProps) {
-  const { cartCount, onCartAdd } = props
+export function CatalogPage() {
+  const [cartCount, setCartCount] = useState(0)
   const [filters, setFilters] = useState<CatalogFiltersState>(defaultFilters)
-  const visible = useFilteredIndexedTables(MOCK_INDEXED_TABLES, filters)
+  const [items, setItems] = useState<ApiService[]>([])
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'fallback'>('idle')
 
-  const handleAddToCart = useCallback(
-    (id: string) => {
-      onCartAdd(id)
-    },
-    [onCartAdd],
-  )
+  const filter = filters.nameQuery.trim()
+  const { items: ranked, ready, searchByImage, resetSearch } =
+    useServiceImageSearch(items, { threshold: 0.4, topK: 12 })
+  const visible = useMemo(() => ranked.filter((x) => x.isVisible), [ranked])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchPublicCart()
+      .then((c) => {
+        if (cancelled) return
+        setCartCount(c.count)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setCartCount(0)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setStatus('loading')
+    fetchServices({ filter })
+      .then((list) => {
+        if (cancelled) return
+        setItems(list)
+        setStatus('ok')
+      })
+      .catch(() => {
+        if (cancelled) return
+        const fb = fallbackServices(filter)
+        setItems(fb)
+        setStatus('fallback')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [filter])
 
   return (
     <>
       <section className="search-section">
-        <CatalogFilters filters={filters} onChange={setFilters} />
+        <CatalogFilters
+          filters={filters}
+          onChange={setFilters}
+          onImageUpload={(file) => searchByImage(file)}
+          onResetImageSearch={() => resetSearch()}
+          ready={ready}
+        />
         <CartIcon count={cartCount} />
       </section>
 
+      {status === 'fallback' && (
+        <p style={{ color: '#7f8c8d', marginTop: 8 }}>
+          Бэкенд недоступен — показаны mock-данные (fallback внутри fetch).
+        </p>
+      )}
+
       <section className="cards-grid">
         {visible.map((item) => (
-          <IndexedTableCard key={item.id} item={item} onAddToCart={handleAddToCart} />
+          <IndexedTableCard key={item.id} item={item} />
         ))}
       </section>
       {visible.length === 0 && (

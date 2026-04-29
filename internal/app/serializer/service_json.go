@@ -8,6 +8,7 @@ type ServiceJSON struct {
 	TableSize   string `json:"table_size"`
 	Speed       string `json:"speed"`
 	Description string `json:"description"`
+	ShortDescriptionEN string `json:"short_description_en"`
 	ImageKey    string `json:"image_key"`
 	VideoKey    string `json:"video_key"`
 	ImageURL    string `json:"image_url"`
@@ -21,6 +22,7 @@ func ServiceToJSON(s repository.Service) ServiceJSON {
 		TableSize:   s.TableSize,
 		Speed:       s.Speed,
 		Description: s.Description,
+		ShortDescriptionEN: s.ShortDescriptionEN,
 		ImageKey:    s.ImageKey,
 		VideoKey:    s.GifKey, // используем GifKey как key короткого видео (по заданию)
 		ImageURL:    mediaURL(s.ImageKey),

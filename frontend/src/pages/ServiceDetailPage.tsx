@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppBreadcrumbs } from '../components/AppBreadcrumbs'
 import { fetchServiceById, type ApiService } from '../api/client'
 import { fallbackServiceById } from '../api/fallback'
+import { proxiedMediaUrl } from '../utils/proxiedMediaUrl'
 
 const DETAIL_GIF_FALLBACK = '/placeholder-index.gif'
 const IMAGE_FALLBACK = '/placeholder-index.png'
@@ -63,7 +64,7 @@ export function ServiceDetailPage() {
     )
   }
 
-  const src = item.video_url?.trim() ? item.video_url : DETAIL_GIF_FALLBACK
+  const src = proxiedMediaUrl(item.video_url?.trim() ? item.video_url : DETAIL_GIF_FALLBACK)
 
   return (
     <>
@@ -99,9 +100,6 @@ export function ServiceDetailPage() {
               <span className="detail-card__badge detail-card__badge--speed">Скорость: {item.speed}</span>
             </div>
             <p className="detail-card__description">{item.description}</p>
-            <p style={{ fontSize: '0.85rem', color: '#7f8c8d' }}>
-              MinIO: <code>image_key</code>={item.image_key || '—'} <code>image_url</code>={item.image_url || '—'}
-            </p>
           </div>
         </div>
       </div>

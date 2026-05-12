@@ -1,6 +1,7 @@
 import { AppBreadcrumbs } from '../components/AppBreadcrumbs'
 import { getMockById } from '../mock/indexedTables'
 import type { MockIndexedTable } from '../mock/indexedTables'
+import { proxiedMediaUrl } from '../utils/proxiedMediaUrl'
 
 interface CartPageProps {
   cartItemIDs: string[]
@@ -90,7 +91,8 @@ export function CartPage(props: CartPageProps) {
               </thead>
               <tbody>
                 {items.map((item) => {
-                  const src = item.imageUrl.trim() ? item.imageUrl : '/placeholder-index.png'
+                  const raw = item.imageUrl.trim() ? item.imageUrl : '/placeholder-index.png'
+                  const src = proxiedMediaUrl(raw)
                   const m = estimateMetrics(item)
                   return (
                     <tr key={item.id}>

@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import type { CatalogFiltersState } from '../hooks/useFilteredIndexedTables'
 
 interface CatalogFiltersProps {
@@ -13,6 +14,7 @@ interface CatalogFiltersProps {
  */
 export function CatalogFilters(props: CatalogFiltersProps) {
   const { filters, onChange, onImageUpload, onResetImageSearch, ready } = props
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const patch = (partial: Partial<CatalogFiltersState>) => {
     onChange({ ...filters, ...partial })
@@ -29,16 +31,26 @@ export function CatalogFilters(props: CatalogFiltersProps) {
         autoComplete="off"
       />
       <input
+        ref={fileInputRef}
         type="file"
         accept="image/*"
-        aria-label="Поиск по изображению"
+        className="file-input-native"
+        aria-label="Image search — choose file"
         onChange={(e) => {
           const file = e.target.files?.[0]
           if (file && onImageUpload) onImageUpload(file)
+          e.target.value = ''
         }}
-        style={{ maxWidth: 220 }}
         disabled={ready === false}
       />
+      <button
+        type="button"
+        className="search-btn search-btn--file"
+        disabled={ready === false}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        Choose image
+      </button>
       <button
         type="button"
         className="search-btn"

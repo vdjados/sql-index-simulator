@@ -7,6 +7,8 @@ export interface MockIndexedTable {
   selectivity: number
   /** Дата публикации для фильтра по дате (ISO YYYY-MM-DD) */
   listedDate: string
+  /** Краткое англ. описание — аналог поля API `short_description_en` (для SigLIP). */
+  shortDescriptionEn: string
   description: string
   /** Пустая строка — на карточке показывается placeholder */
   imageUrl: string
@@ -23,7 +25,8 @@ export const MOCK_INDEXED_TABLES: MockIndexedTable[] = [
     tableSize: '512 MB',
     selectivity: 0.11,
     listedDate: '2026-01-10',
-    // English, 50–100 chars (required for transformers.js CLIP/SigLIP)
+    shortDescriptionEn:
+      'Compact B-Tree index for fast point lookups and ordered scans.',
     description: 'Compact B-Tree index for fast point lookups and ordered scans.',
     imageUrl: '',
     gifUrl: '',
@@ -35,6 +38,7 @@ export const MOCK_INDEXED_TABLES: MockIndexedTable[] = [
     tableSize: '2 GB',
     selectivity: 0.04,
     listedDate: '2026-02-05',
+    shortDescriptionEn: 'Hash index optimized for equality predicates on a single key.',
     description: 'Hash index optimized for equality predicates on a single key.',
     imageUrl: '',
     gifUrl: '',
@@ -46,6 +50,7 @@ export const MOCK_INDEXED_TABLES: MockIndexedTable[] = [
     tableSize: '128 MB',
     selectivity: 0.23,
     listedDate: '2026-03-20',
+    shortDescriptionEn: 'GiST index for range queries and geometric data with good recall.',
     description: 'GiST index for range queries and geometric data with good recall.',
     imageUrl: '',
     gifUrl: '',
@@ -57,6 +62,7 @@ export const MOCK_INDEXED_TABLES: MockIndexedTable[] = [
     tableSize: '1 GB',
     selectivity: 0.08,
     listedDate: '2026-03-01',
+    shortDescriptionEn: 'GIN index for full-text search and arrays, trading speed for space.',
     description: 'GIN index for full-text search and arrays, trading speed for space.',
     imageUrl: '',
     gifUrl: '',

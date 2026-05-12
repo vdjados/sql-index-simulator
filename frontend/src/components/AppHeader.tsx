@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { proxiedMediaUrl } from '../utils/proxiedMediaUrl'
 
 const LOGO_DEFAULT = 'http://localhost:9000/sql-index/logo.svg'
 
@@ -17,7 +18,7 @@ export function AppHeader() {
       <Link to="/" className="header-logo">
         {logoOk ? (
           <img
-            src={LOGO_DEFAULT}
+            src={proxiedMediaUrl(LOGO_DEFAULT)}
             alt="SQL Index Simulator"
             onError={() => setLogoOk(false)}
           />

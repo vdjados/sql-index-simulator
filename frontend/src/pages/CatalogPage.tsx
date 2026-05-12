@@ -18,7 +18,7 @@ export function CatalogPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'fallback'>('idle')
 
   const filter = filters.nameQuery.trim()
-  const { items: ranked, ready, searchByImage, resetSearch } =
+  const { items: ranked, ready, searchByImage, resetSearch, imageEmbedding } =
     useServiceImageSearch(items, { threshold: 0.4, topK: 12 })
   const visible = useMemo(() => ranked.filter((x) => x.isVisible), [ranked])
 
@@ -79,7 +79,11 @@ export function CatalogPage() {
 
       <section className="cards-grid">
         {visible.map((item) => (
-          <IndexedTableCard key={item.id} item={item} />
+          <IndexedTableCard
+            key={item.id}
+            item={item}
+            imageSimilarity={imageEmbedding ? item.score : undefined}
+          />
         ))}
       </section>
       {visible.length === 0 && (

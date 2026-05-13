@@ -86,6 +86,7 @@ func SqlQueryItemToJSON(it repository.RequestService) SqlQueryItemJSON {
 	}
 }
 
+// mediaURL собирает публичный HTTP URL объекта MinIO для SPA.
 func mediaURL(key string) string {
 	key = strings.TrimSpace(key)
 	if key == "" {

@@ -1,13 +1,23 @@
 import { Link } from 'react-router-dom'
+import { useAppSelector } from '../store/hooks'
+import { ROUTES } from '../routePaths'
 
 interface CartIconProps {
-  count: number
+  /** Для гостя: GET /api/cart (без JWT). */
+  guestCount: number
 }
 
-/** Как в services.html: 🧺 и бейдж; при 0 — класс cart-icon--empty. */
+/** Бейдж корзины: авторизованный пользователь — данные из Redux (GET /sql-queries/cart). */
 export function CartIcon(props: CartIconProps) {
-  const { count } = props
+  const { guestCount } = props
+  const isAuthenticated = useAppSelector((s) => s.user.isAuthenticated)
+  const cart = useAppSelector((s) => s.indexedTableSqlQuery.cart)
+  const count = isAuthenticated ? (cart?.count ?? 0) : guestCount
   const isEmpty = count <= 0
+  const draftId = cart?.id
+  const to =
+    isAuthenticated && draftId != null ? ROUTES.sqlQueryDetail(draftId) : ROUTES.CATALOG
+
   if (isEmpty) {
     return (
       <span className="cart-icon cart-icon--empty" aria-label="Корзина пуста">
@@ -17,7 +27,7 @@ export function CartIcon(props: CartIconProps) {
     )
   }
   return (
-    <Link to="/sql_query/draft" className="cart-icon" aria-label="Корзина">
+    <Link to={to} className="cart-icon" aria-label="Корзина sql_query">
       <span className="cart-icon-symbol">🧺</span>
       <span className="cart-badge">{count}</span>
     </Link>

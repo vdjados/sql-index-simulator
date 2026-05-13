@@ -60,11 +60,11 @@ type Service struct {
 	TableSize   string `gorm:"size:64;not null"`
 	Speed       string `gorm:"size:64;not null"`
 	Description string `gorm:"type:text;not null"`
-	// ShortDescriptionEN is used for CLIP/SigLIP embeddings (50–100 chars, English).
+	// ShortDescriptionEN — краткое англ. описание для JSON и поиска по изображению в SPA.
 	ShortDescriptionEN string `gorm:"type:text;not null;default:''"`
-	ImageKey    string `gorm:"size:255"`
-	GifKey      string `gorm:"size:255"`
-	Status      string `gorm:"size:32;not null;default:'active'"` // active / deleted
+	ImageKey           string `gorm:"size:255"`
+	GifKey             string `gorm:"size:255"`
+	Status             string `gorm:"size:32;not null;default:'active'"` // active / deleted
 }
 
 // Request описывает sql_query (симуляцию запроса) и её сводный результат.
@@ -341,53 +341,63 @@ func (r *Repository) bootstrapAuthUsers() error {
 	return nil
 }
 
+// backfillEmptyShortDescriptionEN заполняет пустой short_description_en из description (старые БД).
+func (r *Repository) backfillEmptyShortDescriptionEN() error {
+	return r.db.Exec(`
+		UPDATE services
+		SET short_description_en = LEFT(TRIM(description), 500)
+		WHERE TRIM(COALESCE(short_description_en, '')) = ''
+		  AND TRIM(COALESCE(description, '')) <> ''
+	`).Error
+}
+
 func (r *Repository) bootstrapServices() error {
-	// If services already exist, do nothing.
+	// If services already exist, only ensure English short text is present for API / SigLIP seeding.
 	var count int64
 	if err := r.db.Model(&Service{}).Count(&count).Error; err != nil {
 		return err
 	}
 	if count > 0 {
-		return nil
+		return r.backfillEmptyShortDescriptionEN()
 	}
 
 	// Seed a few services with STRICT English descriptions (50–100 chars).
 	seed := []Service{
 		{
-			ID:          "btree-512mb",
-			Name:        "B-Tree (средняя таблица)",
-			TableSize:   "512 MB",
-			Speed:       "0.60ms",
-			Description: "Compact B-Tree index for fast point lookups and ordered scans.",
+			ID:                 "btree-512mb",
+			Name:               "B-Tree (средняя таблица)",
+			TableSize:          "512 MB",
+			Speed:              "0.60ms",
+			Description:        "Compact B-Tree index for fast point lookups and ordered scans.",
 			ShortDescriptionEN: "Compact B-Tree index for fast point lookups and ordered scans.",
-			Status:      "active",
+			Status:             "active",
 		},
 		{
-			ID:          "hash-2gb",
-			Name:        "Hash (большая таблица)",
-			TableSize:   "2 GB",
-			Speed:       "0.35ms",
-			Description: "Hash index optimized for equality predicates on a single key.",
+			ID:                 "hash-2gb",
+			Name:               "Hash (большая таблица)",
+			TableSize:          "2 GB",
+			Speed:              "0.35ms",
+			Description:        "Hash index optimized for equality predicates on a single key.",
 			ShortDescriptionEN: "Hash index optimized for equality predicates on a single key.",
-			Status:      "active",
+			Status:             "active",
 		},
 		{
-			ID:          "gist-128mb",
-			Name:        "GiST (компактная)",
-			TableSize:   "128 MB",
-			Speed:       "1.20ms",
-			Description: "GiST index for range queries and geometric data with good recall.",
+			ID:                 "gist-128mb",
+			Name:               "GiST (компактная)",
+			TableSize:          "128 MB",
+			Speed:              "1.20ms",
+			Description:        "GiST index for range queries and geometric data with good recall.",
 			ShortDescriptionEN: "GiST index for range queries and geometric data with good recall.",
-			Status:      "active",
+			Status:             "active",
 		},
 		{
-			ID:          "gin-1gb",
-			Name:        "GIN (полнотекст)",
-			TableSize:   "1 GB",
-			Speed:       "0.90ms",
-			Description: "GIN index for full-text search and arrays, trading speed for space.",
+			ID:                 "gin-1gb",
+			Name:               "GIN (полнотекст)",
+			TableSize:          "1 GB",
+			Speed:              "0.90ms",
+			Description:        "GIN index for full-text search and arrays, trading speed for space.",
 			ShortDescriptionEN: "GIN index for full-text search and arrays, trading speed for space.",
-			Status:      "active",
+			Status:             "active",
 		},
 	}
 
@@ -867,9 +877,34 @@ func (r *Repository) GetServices(filter string) ([]Service, error) {
 	return services, nil
 }
 
+func truncateServiceShortRunes(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if max <= 0 || s == "" {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return strings.TrimSpace(string(r[:max]))
+}
+
+func fillServiceShortDescriptionEN(s *Service) {
+	if strings.TrimSpace(s.ShortDescriptionEN) != "" {
+		s.ShortDescriptionEN = truncateServiceShortRunes(s.ShortDescriptionEN, 500)
+		return
+	}
+	if d := strings.TrimSpace(s.Description); d != "" {
+		s.ShortDescriptionEN = truncateServiceShortRunes(d, 120)
+		return
+	}
+	s.ShortDescriptionEN = truncateServiceShortRunes(s.Name, 120)
+}
+
 func (r *Repository) CreateService(s Service) error {
 	// не даём создавать deleted
 	s.Status = "active"
+	fillServiceShortDescriptionEN(&s)
 	return r.db.Create(&s).Error
 }
 

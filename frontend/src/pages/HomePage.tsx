@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Alert, Spinner } from 'react-bootstrap'
 import { Link } from 'react-router-dom'
 import { AppBreadcrumbs } from '../components/AppBreadcrumbs'
 import { fetchServices } from '../api/client'
@@ -33,7 +32,9 @@ export function HomePage() {
   return (
     <>
       <AppBreadcrumbs items={[{ label: 'Главная' }]} />
-      <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: 12 }}>SQL Index Simulator</h1>
+      <h1 className="page-heading" style={{ fontSize: '1.75rem', marginBottom: 12 }}>
+        SQL Index Simulator
+      </h1>
       <p className="lead-text-home">
         Гостевой интерфейс как в лабораторных 1–3 (те же стили <code>index_style.css</code>). Страница{' '}
         <Link to="/catalog">«Индексы»</Link> — карточки и фильтры (лаб. 5).
@@ -46,24 +47,27 @@ export function HomePage() {
         </div>
         <div className="request-summary-body">
           {apiStatus === 'loading' && (
-            <span className="d-flex align-items-center gap-2">
-              <Spinner animation="border" size="sm" />
-              Проверка…
+            <span className="ui-loading-row">
+              <span className="ui-spinner" aria-hidden="true" /> Проверка…
             </span>
           )}
           {apiStatus === 'ok' && <span>{apiInfo}</span>}
-          {apiStatus === 'error' && <span style={{ color: '#c0392b' }}>Ошибка: {apiInfo} (запустите Go на :8082 и dev-фронт на :3000)</span>}
+          {apiStatus === 'error' && (
+            <span className="ui-error" style={{ display: 'inline-block', margin: 0 }}>
+              Ошибка: {apiInfo} (запустите Go на :8082 и dev-фронт на :3000)
+            </span>
+          )}
         </div>
       </div>
 
       {apiStatus === 'error' && (
-        <Alert variant="warning" style={{ maxWidth: 560 }}>
+        <div className="ui-warn-banner">
           Убедитесь, что включён CORS и доступен proxy <code>/api</code> → <code>localhost:8082</code>.
-        </Alert>
+        </div>
       )}
 
       <p>
-        <Link to="/catalog" className="search-btn" style={{ display: 'inline-block', textDecoration: 'none' }}>
+        <Link to="/catalog" className="search-btn search-btn--inline-link">
           Перейти к каталогу индексов
         </Link>
       </p>

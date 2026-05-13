@@ -65,18 +65,27 @@ definitions:
   serializer.ServiceJSON:
     properties:
       description:
+        example: Compact B-Tree index for fast point lookups and ordered scans.
         type: string
       id:
+        example: btree-512mb
         type: string
       image_key:
+        example: seed/btree.svg
         type: string
       image_url:
         type: string
       name:
+        example: B-Tree (medium table)
+        type: string
+      short_description_en:
+        example: Compact B-Tree index for fast point lookups and ordered scans.
         type: string
       speed:
+        example: 0.60ms
         type: string
       table_size:
+        example: 512 MB
         type: string
       video_key:
         type: string
@@ -165,17 +174,35 @@ definitions:
 host: localhost:8082
 info:
   contact: {}
-  description: 'API для лабораторной 4: JWT авторизация, роли, Redis blacklist'
+  description: 'API лабораторной: JWT, роли, Redis blacklist, заявки sql_query, каталог
+    indexed-tables (в JSON поле short_description_en — короткий англ. текст).'
   title: SQL Index Simulator API
   version: "1.0"
 paths:
+  /cart:
+    get:
+      description: Always returns HTTP 200 for the SPA cart icon without JWT.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/serializer.CartJSON'
+      summary: Public cart badge (no auth)
+      tags:
+      - cart
   /indexed-tables:
     get:
-      description: Публичный список indexed tables с фильтрацией по строке
+      description: Public catalog; optional substring filter on name and table_size.
       parameters:
-      - description: Фильтр по name/table_size
+      - description: Case-insensitive filter on name or table_size
         in: query
         name: filter
+        type: string
+      - description: Alias of filter (legacy sample param)
+        in: query
+        name: Title
         type: string
       produces:
       - application/json
@@ -190,41 +217,46 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/serializer.ErrorResponse'
-      summary: Получить список индексов
+      summary: List indexed tables
       tags:
       - indexed-tables
     post:
       consumes:
       - multipart/form-data
+      - application/json
       parameters:
-      - description: ID индекса
+      - description: Stable service id (slug)
         in: formData
         name: id
         required: true
         type: string
-      - description: Название
+      - description: Display name
         in: formData
         name: name
         required: true
         type: string
-      - description: Размер таблицы
+      - description: Table + index size label
         in: formData
         name: table_size
         required: true
         type: string
-      - description: Скорость
+      - description: Latency label
         in: formData
         name: speed
         type: string
-      - description: Описание
+      - description: Full English description
         in: formData
         name: description
         type: string
-      - description: Картинка
+      - description: Short English blurb (~50–100 chars) for SPA multimodal search
+        in: formData
+        name: short_description_en
+        type: string
+      - description: Card image
         in: formData
         name: image
         type: file
-      - description: Видео/GIF
+      - description: Preview GIF/video
         in: formData
         name: video
         type: file
@@ -249,13 +281,13 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Создать индекс (moderator)
+      summary: Create indexed table (moderator)
       tags:
       - indexed-tables
   /indexed-tables/{id}:
     get:
       parameters:
-      - description: ID индекса
+      - description: Service id (slug)
         in: path
         name: id
         required: true
@@ -271,30 +303,30 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/serializer.ErrorResponse'
-      summary: Получить индекс по ID
+      summary: Get indexed table by ID
       tags:
       - indexed-tables
   /sql-queries:
     get:
-      description: Creator видит только свои заявки, moderator видит все
+      description: Creators see their own rows; moderators see all.
       parameters:
-      - description: Статус
+      - description: Status filter
         in: query
         name: status
         type: string
-      - description: Дата от YYYY-MM-DD
+      - description: Formed-from date YYYY-MM-DD
         in: query
         name: formed-from
         type: string
-      - description: Дата до YYYY-MM-DD
+      - description: Formed-to date YYYY-MM-DD
         in: query
         name: formed-to
         type: string
-      - description: Старый алиас formed-from
+      - description: Legacy alias of formed-from
         in: query
         name: from-date
         type: string
-      - description: Старый алиас formed-to
+      - description: Legacy alias of formed-to
         in: query
         name: to-date
         type: string
@@ -317,13 +349,13 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Список заявок
+      summary: List sql queries
       tags:
       - sql-queries
   /sql-queries/{id}:
     delete:
       parameters:
-      - description: ID заявки
+      - description: Sql query id
         in: path
         name: id
         required: true
@@ -349,12 +381,12 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Удалить черновик заявки
+      summary: Delete sql query draft
       tags:
       - sql-queries
     get:
       parameters:
-      - description: ID заявки
+      - description: Sql query id
         in: path
         name: id
         required: true
@@ -380,19 +412,19 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Получить одну заявку
+      summary: Get one sql query
       tags:
       - sql-queries
     put:
       consumes:
       - application/json
       parameters:
-      - description: ID заявки
+      - description: Sql query id
         in: path
         name: id
         required: true
         type: integer
-      - description: Поля заявки
+      - description: Editable fields
         in: body
         name: body
         required: true
@@ -419,7 +451,7 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Обновить поля заявки
+      summary: Update sql query fields
       tags:
       - sql-queries
   /sql-queries/{id}/finish:
@@ -427,12 +459,12 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: ID заявки
+      - description: Sql query id
         in: path
         name: id
         required: true
         type: integer
-      - description: 'Новый статус: completed/rejected'
+      - description: 'New status: completed or rejected'
         in: body
         name: body
         required: true
@@ -459,13 +491,13 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Завершить/отклонить заявку (только moderator)
+      summary: Finish or reject sql query (moderator)
       tags:
       - sql-queries
   /sql-queries/{id}/form:
     put:
       parameters:
-      - description: ID заявки
+      - description: Sql query id
         in: path
         name: id
         required: true
@@ -491,18 +523,18 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Сформировать заявку
+      summary: Form (submit) sql query
       tags:
       - sql-queries
   /sql-queries/{id}/indexed-tables/{indexed_table_id}:
     delete:
       parameters:
-      - description: ID заявки
+      - description: Sql query id
         in: path
         name: id
         required: true
         type: integer
-      - description: ID индекса
+      - description: Indexed table id (slug)
         in: path
         name: indexed_table_id
         required: true
@@ -528,24 +560,24 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Удалить позицию из заявки
+      summary: Remove line item from sql query
       tags:
       - sql-query-items
     put:
       consumes:
       - application/json
       parameters:
-      - description: ID заявки
+      - description: Sql query id
         in: path
         name: id
         required: true
         type: integer
-      - description: ID индекса
+      - description: Indexed table id (slug)
         in: path
         name: indexed_table_id
         required: true
         type: string
-      - description: Поля позиции
+      - description: Line item fields
         in: body
         name: body
         required: true
@@ -572,7 +604,7 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Изменить позицию в заявке
+      summary: Edit line item in sql query
       tags:
       - sql-query-items
   /sql-queries/cart:
@@ -590,13 +622,13 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Иконка корзины текущего пользователя
+      summary: Authenticated user cart badge
       tags:
       - sql-queries
   /sql-queries/draft/indexed-tables/{indexed_table_id}:
     post:
       parameters:
-      - description: ID индекса
+      - description: Indexed table id (slug)
         in: path
         name: indexed_table_id
         required: true
@@ -618,7 +650,7 @@ paths:
             $ref: '#/definitions/serializer.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Добавить индекс в черновик
+      summary: Add indexed table to draft sql query
       tags:
       - sql-query-items
   /users/login:
@@ -626,7 +658,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Учетные данные
+      - description: Credentials
         in: body
         name: body
         required: true
@@ -647,7 +679,7 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/serializer.ErrorResponse'
-      summary: Логин (JWT)
+      summary: Login (JWT)
       tags:
       - users
   /users/logout:
@@ -675,7 +707,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: Пользователь
+      - description: Registration payload
         in: body
         name: body
         required: true
@@ -692,7 +724,7 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/serializer.ErrorResponse'
-      summary: Регистрация
+      summary: Register user
       tags:
       - users
 schemes:

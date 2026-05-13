@@ -82,3 +82,353 @@
   color: #7f8c8d;
   margin-bottom: 1rem;
 }
+
+.page--with-overlay-host {
+  position: relative;
+}
+
+.global-blocking-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  pointer-events: all;
+}
+
+.global-blocking-overlay__text {
+  font-size: 0.95rem;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.header-nav-link--muted {
+  opacity: 0.45;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+.header-user-label {
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 8px;
+}
+
+.sql-queries-table-wrap {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.sql-query-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.auth-page-min {
+  max-width: 420px;
+  margin: 2rem auto;
+  padding: 1.5rem 1.75rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+}
+
+.auth-page-min__label {
+  display: block;
+  font-size: 13px;
+  color: #526170;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+.auth-page-min__input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #dce1e6;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 15px;
+}
+
+.auth-page-min .search-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Заголовки страниц в одном стиле с каталогом */
+.page-heading {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 12px;
+}
+
+/* Подсказки и информационные блоки */
+.ui-hint {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.ui-note {
+  font-size: 0.85rem;
+  color: #526170;
+  line-height: 1.45;
+  padding: 10px 14px;
+  margin: 12px 0;
+  border-radius: 10px;
+  border-left: 4px solid #2ecc71;
+  background: linear-gradient(90deg, rgba(46, 204, 113, 0.08), rgba(52, 152, 219, 0.06));
+}
+
+.ui-note--inline {
+  margin: 0 0 12px;
+}
+
+.ui-error {
+  font-size: 0.9rem;
+  color: #c0392b;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(231, 76, 60, 0.08);
+  border: 1px solid rgba(231, 76, 60, 0.28);
+  margin-bottom: 12px;
+}
+
+.ui-warn-banner {
+  font-size: 0.9rem;
+  color: #8b6914;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(241, 196, 15, 0.12);
+  border: 1px solid rgba(241, 196, 15, 0.45);
+  max-width: 560px;
+  margin-bottom: 16px;
+}
+
+/* Спиннер в цветах темы (без Bootstrap) */
+.ui-spinner {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  border: 2px solid rgba(52, 152, 219, 0.25);
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: ui-spin 0.65s linear infinite;
+  vertical-align: -0.2em;
+}
+
+.ui-spinner--lg {
+  width: 2rem;
+  height: 2rem;
+  border-width: 3px;
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ui-loading-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Поля форм — как поиск в каталоге */
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ui-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #526170;
+}
+
+.ui-select {
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid #d0d7de;
+  font-size: 15px;
+  padding: 0 12px;
+  color: #2c3e50;
+  background-color: #fff;
+  min-width: 160px;
+}
+
+.ui-select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.ui-textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #d0d7de;
+  font-size: 15px;
+  padding: 10px 12px;
+  color: #2c3e50;
+  resize: vertical;
+  min-height: 88px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.ui-textarea:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.ui-input-table {
+  width: 100%;
+  max-width: 96px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid #d0d7de;
+  padding: 0 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.ui-input-table:focus {
+  outline: none;
+  border-color: #3498db;
+}
+
+.filters-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin-top: 20px;
+}
+
+.sql-queries-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.search-btn--sm {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+/* Варианты градиентной кнопки — та же форма, что у .search-btn в index_style */
+.search-btn--danger {
+  background: linear-gradient(90deg, #e74c3c, #c0392b);
+}
+
+.search-btn--danger:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.search-btn--warn {
+  background: linear-gradient(90deg, #f39c12, #e67e22);
+}
+
+.search-btn--warn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+/* Вторичное действие: белая «таблетка» с обводкой в палитре сайта */
+.search-btn--outline {
+  background: #ffffff;
+  color: #2980b9;
+  border: 2px solid #3498db;
+  box-shadow: none;
+}
+
+.search-btn--outline:hover:not(:disabled) {
+  background: rgba(52, 152, 219, 0.08);
+  opacity: 1;
+}
+
+/* Ссылка-кнопка без лишних inline-стилей */
+.search-btn--inline-link {
+  display: inline-block;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.service-card-desc {
+  font-size: 13px;
+  color: #526170;
+  margin-top: 8px;
+  line-height: 1.45;
+}
+
+.service-card-actions {
+  margin-top: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-more-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: #3498db;
+}
+
+.card-more-link:hover {
+  color: #2ecc71;
+}
+
+.card-guest-hint {
+  font-size: 12px;
+  color: #95a5a6;
+}
+
+.similarity-badge {
+  font-size: 12px;
+  color: #2980b9;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+.application-detail--dimmed {
+  opacity: 0.62;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.request-section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+
+/* Отступ «Сбросить фото» в строке поиска каталога */
+.search-form .catalog-filters-reset {
+  margin-left: 8px;
+}

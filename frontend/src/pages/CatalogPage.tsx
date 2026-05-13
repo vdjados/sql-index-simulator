@@ -6,11 +6,12 @@ import {
   defaultFilters,
   type CatalogFiltersState,
 } from '../hooks/useFilteredIndexedTables'
-import { fetchPublicCart, fetchServices, type ApiService } from '../api/client'
+import { axiosFetchPublicCart, axiosFetchServices } from '../modules/servicesAxios'
 import { fallbackServices } from '../api/fallback'
 import { useServiceImageSearch } from '../hooks/useServiceImageSearch'
+import type { ApiService } from '../api/client'
 
-/** Список как `services.html`: секция поиска + корзина, сетка `.cards-grid`, карточки из mock. */
+/** Каталог: услуги через axios; корзина гостя через axios GET /cart. */
 export function CatalogPage() {
   const [cartCount, setCartCount] = useState(0)
   const [filters, setFilters] = useState<CatalogFiltersState>(defaultFilters)
@@ -24,7 +25,7 @@ export function CatalogPage() {
 
   useEffect(() => {
     let cancelled = false
-    fetchPublicCart()
+    axiosFetchPublicCart()
       .then((c) => {
         if (cancelled) return
         setCartCount(c.count)
@@ -41,7 +42,7 @@ export function CatalogPage() {
   useEffect(() => {
     let cancelled = false
     setStatus('loading')
-    fetchServices({ filter })
+    axiosFetchServices({ filter })
       .then((list) => {
         if (cancelled) return
         setItems(list)
@@ -68,7 +69,7 @@ export function CatalogPage() {
           onResetImageSearch={() => resetSearch()}
           ready={ready}
         />
-        <CartIcon count={cartCount} />
+        <CartIcon guestCount={cartCount} />
       </section>
 
       {status === 'fallback' && (

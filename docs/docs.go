@@ -15,21 +15,47 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/cart": {
+            "get": {
+                "description": "Always returns HTTP 200 for the SPA cart icon without JWT.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cart"
+                ],
+                "summary": "Public cart badge (no auth)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/serializer.CartJSON"
+                        }
+                    }
+                }
+            }
+        },
         "/indexed-tables": {
             "get": {
-                "description": "Публичный список indexed tables с фильтрацией по строке",
+                "description": "Public catalog; optional substring filter on name and table_size.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "indexed-tables"
                 ],
-                "summary": "Получить список индексов",
+                "summary": "List indexed tables",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Фильтр по name/table_size",
+                        "description": "Case-insensitive filter on name or table_size",
                         "name": "filter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Alias of filter (legacy sample param)",
+                        "name": "Title",
                         "in": "query"
                     }
                 ],
@@ -58,7 +84,8 @@ const docTemplate = `{
                     }
                 ],
                 "consumes": [
-                    "multipart/form-data"
+                    "multipart/form-data",
+                    "application/json"
                 ],
                 "produces": [
                     "application/json"
@@ -66,50 +93,56 @@ const docTemplate = `{
                 "tags": [
                     "indexed-tables"
                 ],
-                "summary": "Создать индекс (moderator)",
+                "summary": "Create indexed table (moderator)",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ID индекса",
+                        "description": "Stable service id (slug)",
                         "name": "id",
                         "in": "formData",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Название",
+                        "description": "Display name",
                         "name": "name",
                         "in": "formData",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Размер таблицы",
+                        "description": "Table + index size label",
                         "name": "table_size",
                         "in": "formData",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Скорость",
+                        "description": "Latency label",
                         "name": "speed",
                         "in": "formData"
                     },
                     {
                         "type": "string",
-                        "description": "Описание",
+                        "description": "Full English description",
                         "name": "description",
                         "in": "formData"
                     },
                     {
+                        "type": "string",
+                        "description": "Short English blurb (~50–100 chars) for SPA multimodal search",
+                        "name": "short_description_en",
+                        "in": "formData"
+                    },
+                    {
                         "type": "file",
-                        "description": "Картинка",
+                        "description": "Card image",
                         "name": "image",
                         "in": "formData"
                     },
                     {
                         "type": "file",
-                        "description": "Видео/GIF",
+                        "description": "Preview GIF/video",
                         "name": "video",
                         "in": "formData"
                     }
@@ -150,11 +183,11 @@ const docTemplate = `{
                 "tags": [
                     "indexed-tables"
                 ],
-                "summary": "Получить индекс по ID",
+                "summary": "Get indexed table by ID",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ID индекса",
+                        "description": "Service id (slug)",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -183,42 +216,42 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creator видит только свои заявки, moderator видит все",
+                "description": "Creators see their own rows; moderators see all.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "sql-queries"
                 ],
-                "summary": "Список заявок",
+                "summary": "List sql queries",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Статус",
+                        "description": "Status filter",
                         "name": "status",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Дата от YYYY-MM-DD",
+                        "description": "Formed-from date YYYY-MM-DD",
                         "name": "formed-from",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Дата до YYYY-MM-DD",
+                        "description": "Formed-to date YYYY-MM-DD",
                         "name": "formed-to",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Старый алиас formed-from",
+                        "description": "Legacy alias of formed-from",
                         "name": "from-date",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Старый алиас formed-to",
+                        "description": "Legacy alias of formed-to",
                         "name": "to-date",
                         "in": "query"
                     }
@@ -261,7 +294,7 @@ const docTemplate = `{
                 "tags": [
                     "sql-queries"
                 ],
-                "summary": "Иконка корзины текущего пользователя",
+                "summary": "Authenticated user cart badge",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -291,11 +324,11 @@ const docTemplate = `{
                 "tags": [
                     "sql-query-items"
                 ],
-                "summary": "Добавить индекс в черновик",
+                "summary": "Add indexed table to draft sql query",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ID индекса",
+                        "description": "Indexed table id (slug)",
                         "name": "indexed_table_id",
                         "in": "path",
                         "required": true
@@ -336,11 +369,11 @@ const docTemplate = `{
                 "tags": [
                     "sql-queries"
                 ],
-                "summary": "Получить одну заявку",
+                "summary": "Get one sql query",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "ID заявки",
+                        "description": "Sql query id",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -388,17 +421,17 @@ const docTemplate = `{
                 "tags": [
                     "sql-queries"
                 ],
-                "summary": "Обновить поля заявки",
+                "summary": "Update sql query fields",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "ID заявки",
+                        "description": "Sql query id",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Поля заявки",
+                        "description": "Editable fields",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -446,11 +479,11 @@ const docTemplate = `{
                 "tags": [
                     "sql-queries"
                 ],
-                "summary": "Удалить черновик заявки",
+                "summary": "Delete sql query draft",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "ID заявки",
+                        "description": "Sql query id",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -500,17 +533,17 @@ const docTemplate = `{
                 "tags": [
                     "sql-queries"
                 ],
-                "summary": "Завершить/отклонить заявку (только moderator)",
+                "summary": "Finish or reject sql query (moderator)",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "ID заявки",
+                        "description": "Sql query id",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Новый статус: completed/rejected",
+                        "description": "New status: completed or rejected",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -560,11 +593,11 @@ const docTemplate = `{
                 "tags": [
                     "sql-queries"
                 ],
-                "summary": "Сформировать заявку",
+                "summary": "Form (submit) sql query",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "ID заявки",
+                        "description": "Sql query id",
                         "name": "id",
                         "in": "path",
                         "required": true
@@ -614,24 +647,24 @@ const docTemplate = `{
                 "tags": [
                     "sql-query-items"
                 ],
-                "summary": "Изменить позицию в заявке",
+                "summary": "Edit line item in sql query",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "ID заявки",
+                        "description": "Sql query id",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "ID индекса",
+                        "description": "Indexed table id (slug)",
                         "name": "indexed_table_id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "Поля позиции",
+                        "description": "Line item fields",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -679,18 +712,18 @@ const docTemplate = `{
                 "tags": [
                     "sql-query-items"
                 ],
-                "summary": "Удалить позицию из заявки",
+                "summary": "Remove line item from sql query",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "ID заявки",
+                        "description": "Sql query id",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "ID индекса",
+                        "description": "Indexed table id (slug)",
                         "name": "indexed_table_id",
                         "in": "path",
                         "required": true
@@ -735,10 +768,10 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Логин (JWT)",
+                "summary": "Login (JWT)",
                 "parameters": [
                     {
-                        "description": "Учетные данные",
+                        "description": "Credentials",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -813,10 +846,10 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Регистрация",
+                "summary": "Register user",
                 "parameters": [
                     {
-                        "description": "Пользователь",
+                        "description": "Registration payload",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -944,25 +977,35 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Compact B-Tree index for fast point lookups and ordered scans."
                 },
                 "id": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "btree-512mb"
                 },
                 "image_key": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "seed/btree.svg"
                 },
                 "image_url": {
                     "type": "string"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "B-Tree (medium table)"
+                },
+                "short_description_en": {
+                    "type": "string",
+                    "example": "Compact B-Tree index for fast point lookups and ordered scans."
                 },
                 "speed": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "0.60ms"
                 },
                 "table_size": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "512 MB"
                 },
                 "video_key": {
                     "type": "string"
@@ -1110,7 +1153,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/api",
 	Schemes:          []string{"http"},
 	Title:            "SQL Index Simulator API",
-	Description:      "API для лабораторной 4: JWT авторизация, роли, Redis blacklist",
+	Description:      "API лабораторной: JWT, роли, Redis blacklist, заявки sql_query, каталог indexed-tables (в JSON поле short_description_en — короткий англ. текст).",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

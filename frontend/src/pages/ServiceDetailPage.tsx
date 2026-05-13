@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useStore } from 'react-redux'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppBreadcrumbs } from '../components/AppBreadcrumbs'
-import { fetchServiceById, type ApiService } from '../api/client'
+import { axiosFetchServiceById } from '../modules/servicesAxios'
 import { fallbackServiceById } from '../api/fallback'
 import { proxiedMediaUrl } from '../utils/proxiedMediaUrl'
+import { useAppDispatch, useAppSelector } from '../store/hooks'
+import { addIndexedTableToSqlQueryDraftThunk } from '../store/slices/indexedTableSqlQuerySlice'
+import { useBlockingUi } from '../context/BlockingUiContext'
+import { ROUTES } from '../routePaths'
+import type { RootState } from '../store'
+import type { ApiService } from '../api/client'
 
 const DETAIL_GIF_FALLBACK = '/placeholder-index.gif'
 const IMAGE_FALLBACK = '/placeholder-index.png'
 
-/** Как `service.html`: `.detail-wrapper`, `.detail-card`, бейджи таблица/скорость, кнопка `.search-btn`. */
 export function ServiceDetailPage() {
   const { id: rawId } = useParams()
   const navigate = useNavigate()
+  const dispatch = useAppDispatch()
+  const store = useStore<RootState>()
+  const isAuthenticated = useAppSelector((s) => s.user.isAuthenticated)
+  const { blocked } = useBlockingUi()
   const id = rawId ? decodeURIComponent(rawId) : ''
 
   const [item, setItem] = useState<ApiService | undefined>(undefined)
@@ -25,7 +35,7 @@ export function ServiceDetailPage() {
       return
     }
     setStatus('loading')
-    fetchServiceById(id)
+    axiosFetchServiceById(id)
       .then((svc) => {
         if (cancelled) return
         setItem(svc)
@@ -47,17 +57,28 @@ export function ServiceDetailPage() {
     }
   }, [id])
 
+  const handleAdd = () => {
+    if (!isAuthenticated || !id || blocked) return
+    void dispatch(addIndexedTableToSqlQueryDraftThunk(id)).then((a) => {
+      if (addIndexedTableToSqlQueryDraftThunk.fulfilled.match(a)) {
+        const draftId = store.getState().indexedTableSqlQuery.cart?.id
+        if (draftId != null) navigate(ROUTES.sqlQueryDetail(draftId))
+        else navigate(ROUTES.CATALOG)
+      }
+    })
+  }
+
   if (!item) {
     return (
       <>
         <AppBreadcrumbs
           items={[
-            { label: 'Индексы', to: '/' },
+            { label: 'Индексы', to: ROUTES.CATALOG },
             { label: 'Не найдено' },
           ]}
         />
         <p>{status === 'loading' ? 'Загрузка…' : 'Услуга не найдена.'}</p>
-        <button type="button" className="search-btn" onClick={() => navigate('/')}>
+        <button type="button" className="search-btn" onClick={() => navigate(ROUTES.CATALOG)}>
           В каталог
         </button>
       </>
@@ -70,7 +91,7 @@ export function ServiceDetailPage() {
     <>
       <AppBreadcrumbs
         items={[
-          { label: 'Индексы', to: '/' },
+          { label: 'Индексы', to: ROUTES.CATALOG },
           { label: item.name },
         ]}
       />
@@ -100,6 +121,17 @@ export function ServiceDetailPage() {
               <span className="detail-card__badge detail-card__badge--speed">Скорость: {item.speed}</span>
             </div>
             <p className="detail-card__description">{item.description}</p>
+            <div className="detail-card__form">
+              {isAuthenticated ? (
+                <button type="button" className="search-btn" disabled={blocked} onClick={handleAdd}>
+                  Добавить в новую sql_query
+                </button>
+              ) : (
+                <p className="ui-hint">
+                  <Link to={ROUTES.SIGN_IN}>Войдите</Link>, чтобы добавить услугу в заявку.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

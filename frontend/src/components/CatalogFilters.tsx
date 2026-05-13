@@ -51,12 +51,7 @@ export function CatalogFilters(props: CatalogFiltersProps) {
       >
         Choose image
       </button>
-      <button
-        type="button"
-        className="search-btn"
-        onClick={() => onResetImageSearch?.()}
-        style={{ marginLeft: 8 }}
-      >
+      <button type="button" className="search-btn search-btn--outline catalog-filters-reset" onClick={() => onResetImageSearch?.()}>
         Сбросить фото
       </button>
       <button type="submit" className="search-btn">
